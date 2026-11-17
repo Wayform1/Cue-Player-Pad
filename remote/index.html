@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0c1016">
+  <title>CUE PLAYER PAD · Remoto</title>
+  <link rel="stylesheet" href="/remote.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">CUE PLAYER <span>PAD</span></div>
+    <div class="conn" id="conn">
+      <i aria-hidden="true"></i>
+      <span id="connText">Conectando…</span>
+    </div>
+  </header>
+
+  <main>
+    <section class="master-card" aria-label="Volumen general">
+      <div class="master-head">
+        <span class="kicker">MASTER</span>
+        <output id="masterValue">100%</output>
+      </div>
+      <input id="master" type="range" min="0" max="100" step="1" value="100" aria-label="Volumen general">
+      <div class="actions">
+        <button id="masterMute" type="button">Mute</button>
+        <button id="stopAll" class="danger" type="button">Detener todo</button>
+        <button id="reset" type="button">Reiniciar LEDs</button>
+      </div>
+    </section>
+
+    <div class="now" id="now">Sin reproducción</div>
+
+    <section class="grid" id="grid" aria-label="Pads"></section>
+
+    <p class="hint">Toca un pad para reproducir o detener. El audio y el controlador MIDI siguen en el equipo anfitrión.</p>
+  </main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+  <script src="/remote.js"></script>
+</body>
+</html>

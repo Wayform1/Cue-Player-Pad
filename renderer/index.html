@@ -1,0 +1,302 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta
+    http-equiv="Content-Security-Policy"
+    content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'"
+  >
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CUE PLAYER PAD</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="boot-screen" id="bootScreen" role="status" aria-live="polite">
+    <div class="boot-card">
+      <div class="boot-brand">CUE PLAYER <span>PAD</span></div>
+      <div class="boot-sub" id="bootLabel">Preparando la sesión…</div>
+      <div class="boot-bar" aria-hidden="true"><div class="boot-fill" id="bootFill"></div></div>
+      <div class="boot-meta">
+        <span id="bootPercent">0 %</span>
+        <span>Audio · MIDI · Proyecto</span>
+      </div>
+      <div class="boot-credit">Creado por Enrique Bao 2026</div>
+    </div>
+  </div>
+
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-copy">
+          <div class="brand-title">CUE PLAYER <span>PAD</span></div>
+          <div class="brand-sub">64 pads · Web Audio · Web MIDI</div>
+        </div>
+      </div>
+
+      <div class="now-playing">
+        <div class="eyebrow" id="nowState">SIN REPRODUCCIÓN</div>
+        <div class="track-title" id="nowName">—</div>
+      </div>
+
+      <div class="scope-wrap">
+        <canvas id="spectrum" aria-hidden="true"></canvas>
+      </div>
+
+      <div class="clock-wrap">
+        <div class="clock" id="clock">00:00</div>
+        <div class="progress-track" aria-hidden="true">
+          <div class="progress-fill" id="progress"></div>
+        </div>
+      </div>
+    </header>
+
+    <div class="toolbar" aria-label="Acciones del proyecto">
+      <div class="toolbar-group">
+        <button class="btn btn-mini" id="newProjectButton" type="button">Nuevo proyecto</button>
+        <button class="btn btn-primary btn-mini" id="saveProjectButton" type="button">Guardar proyecto…</button>
+      </div>
+      <div class="toolbar-group toolbar-right">
+        <button class="btn btn-primary btn-mini" id="assignButton" type="button" aria-haspopup="dialog" aria-expanded="false">Asignar funciones</button>
+        <button class="btn btn-ghost btn-mini" id="remoteButton" type="button" aria-haspopup="dialog">Remoto</button>
+        <button class="btn btn-ghost btn-mini" id="stopLastButton" type="button">Parar última</button>
+        <button class="btn btn-ghost btn-mini" id="stopAllButton" type="button">Detener todo</button>
+        <button class="btn btn-accent btn-mini" id="resetButton" type="button">Reiniciar LEDs</button>
+        <button class="btn btn-ghost btn-mini" id="helpButton" type="button">Ayuda</button>
+      </div>
+    </div>
+
+    <main class="stage">
+      <aside class="master-rail" id="masterRail" aria-label="Volumen general">
+        <div class="rail-head">
+          <span class="card-kicker">MASTER</span>
+          <span class="pill" id="masterValue">100%</span>
+        </div>
+        <div class="rail-assigned" id="masterAssigned">Fader Master</div>
+        <div
+          class="fader master-fader"
+          id="masterFader"
+          role="slider"
+          tabindex="0"
+          aria-label="Volumen general"
+          aria-valuemin="0"
+          aria-valuemax="100"
+          aria-valuenow="100"
+        >
+          <div class="fader-track"></div>
+          <div class="fader-fill"></div>
+          <div class="fader-thumb"></div>
+        </div>
+        <div class="rail-caption">MASTER · 56</div>
+        <button class="btn btn-ghost btn-mini" id="masterMuteButton" type="button" aria-pressed="false">Mute</button>
+        <div class="rail-actions">
+          <button class="btn btn-mini" id="assignMaster" type="button" aria-pressed="false">Asignar</button>
+          <button class="btn btn-ghost btn-mini" id="clearMaster" type="button">Quitar</button>
+        </div>
+      </aside>
+
+      <section class="device" aria-label="Pads">
+        <div class="device-head">
+          <div class="device-title">
+            <b>8×8 PADS</b>
+            <small>64 pistas · 8 faders</small>
+          </div>
+          <div class="device-meta">
+            <span class="midi-status" id="midiStatus">
+              <i class="midi-dot" aria-hidden="true"></i>
+              <span id="midiText">Controlador no detectado</span>
+            </span>
+          </div>
+        </div>
+
+        <div class="hardware-grid" id="padGrid" aria-label="Pads y controles del sampler"></div>
+      </section>
+
+      <aside class="assign-panel" id="assignPanel" aria-label="Asignar funciones" aria-hidden="true" hidden>
+        <div class="assign-head">
+          <div>
+            <span class="card-kicker">ASIGNAR FUNCIONES</span>
+            <div class="assign-sub">Botones y faders del controlador</div>
+          </div>
+          <div class="assign-head-actions">
+            <button class="btn btn-ghost btn-mini" id="mappingClear" type="button" title="Quitar todas las asignaciones de los botones">Quitar todo</button>
+            <button class="icon-button" id="assignClose" type="button" aria-label="Cerrar el panel de asignación">✕</button>
+          </div>
+        </div>
+
+        <div class="assign-scroll">
+          <section class="assign-section">
+            <h3 class="assign-title">BOTONES</h3>
+            <div class="mapping-list" id="mappingList"></div>
+          </section>
+
+          <section class="assign-section">
+            <h3 class="assign-title">FADERS DE CANAL</h3>
+            <div class="fader-list" id="faderList"></div>
+          </section>
+
+          <section class="assign-section">
+            <h3 class="assign-title">FADER MASTER</h3>
+            <div class="mapping-row master-assign-row">
+              <span class="mapping-name">
+                <b>Volumen general</b>
+                <small id="masterAssignLabel">Fader Master</small>
+              </span>
+              <div class="assign-buttons">
+                <button class="btn btn-mini" id="assignMasterPanel" type="button" aria-pressed="false">Asignar</button>
+                <button class="btn btn-ghost btn-mini" id="clearMasterPanel" type="button">Quitar</button>
+              </div>
+            </div>
+          </section>
+        </div>
+      </aside>
+    </main>
+
+    <div class="assign-backdrop" id="assignBackdrop" hidden></div>
+
+    <footer class="statusbar">
+      <span class="status-msg" id="statusMsg" role="status" aria-live="polite"></span>
+      <span class="status-hint">Clic derecho en un pad: opciones · Asignar funciones abre el panel de botones y faders</span>
+    </footer>
+  </div>
+
+  <div class="context-menu" id="contextMenu" role="menu" hidden></div>
+
+  <dialog class="modal" id="renameDialog">
+    <form class="modal-body" id="renameForm" method="dialog">
+      <div>
+        <div class="modal-kicker">RENOMBRAR PISTA</div>
+        <h2 class="modal-title" id="renameTitle">Pad</h2>
+      </div>
+      <label class="field">
+        <span class="field-label">NOMBRE DE LA PISTA</span>
+        <input class="text-input" id="renameInput" type="text" maxlength="200" autocomplete="off">
+      </label>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="renameCancel" type="button">Cancelar</button>
+        <button class="btn btn-primary" id="renameAccept" type="submit">Aceptar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog class="modal" id="editDialog">
+    <div class="modal-body">
+      <div>
+        <div class="modal-kicker">VOLUMEN DE LA PISTA</div>
+        <h2 class="modal-title" id="editTitle">Pista</h2>
+      </div>
+      <output class="edit-percent" id="editPercent">100%</output>
+      <input class="range" id="editRange" type="range" min="0" max="100" step="1" value="100">
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="editCancel" type="button">Cancelar</button>
+        <button class="btn btn-primary" id="editAccept" type="button">Aceptar</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog class="modal" id="newProjectDialog">
+    <div class="modal-body">
+      <div>
+        <div class="modal-kicker">NUEVO PROYECTO</div>
+        <h2 class="modal-title">¿Empezar de cero?</h2>
+      </div>
+      <p class="dialog-text">Se quitarán todas las pistas, los mutes y las asignaciones de botones y faders. Los archivos de audio no se borran del disco.</p>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="newProjectCancel" type="button">Cancelar</button>
+        <button class="btn btn-primary" id="newProjectAccept" type="button">Crear proyecto</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog class="modal modal-remote" id="remoteDialog">
+    <div class="modal-body">
+      <div>
+        <div class="modal-kicker">CONTROL REMOTO</div>
+        <h2 class="modal-title">Controla este equipo desde el navegador</h2>
+      </div>
+      <p class="dialog-text">
+        Conecta el teléfono, la tablet u otro ordenador a la misma red Wi-Fi o LAN y abre una de estas direcciones.
+        El controlador MIDI sigue conectado a este equipo; el navegador solo envía las órdenes.
+      </p>
+      <div class="remote-status" id="remoteStatus">Comprobando el servidor…</div>
+      <div class="remote-list" id="remoteList"></div>
+      <p class="remote-note">
+        Si Windows pregunta por el firewall, permite el acceso en redes privadas. El código de acceso cambia cada vez que abres la aplicación.
+      </p>
+      <div class="modal-actions">
+        <button class="btn btn-primary" id="remoteClose" type="button">Cerrar</button>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog class="modal modal-help" id="helpDialog">
+    <div class="modal-body help-body">
+      <div class="mapping-head">
+        <div>
+          <div class="modal-kicker">MANUAL BÁSICO</div>
+          <h2 class="modal-title">Cómo usar CUE PLAYER PAD</h2>
+        </div>
+        <p class="mapping-hint">Todo se guarda automáticamente en la sesión; usa <b>Guardar proyecto…</b> para exportar una copia.</p>
+      </div>
+
+      <div class="help-scroll">
+        <section class="help-section">
+          <h3>Cargar y reproducir</h3>
+          <ul>
+            <li><b>Clic en un pad vacío</b> para elegir un archivo de audio.</li>
+            <li><b>Clic en un pad cargado</b> para reproducir o detener la pista.</li>
+            <li><b>Clic derecho en un pad</b>: cargar, reproducir, silenciar, renombrar, volumen, mover, asignar fader o vaciar.</li>
+            <li>Los pads amarillos tienen pista; los verdes están sonando y los rojos se han detenido.</li>
+          </ul>
+        </section>
+
+        <section class="help-section">
+          <h3>Asignar botones y faders</h3>
+          <ul>
+            <li>Pulsa <b>Asignar funciones</b> en la barra superior para abrir el panel lateral. Ciérralo con la ✕, con <code>Esc</code> o tocando fuera.</li>
+            <li>En <b>BOTONES</b>, cada selector cambia la función de los 17 botones del controlador.</li>
+            <li>En <b>FADERS DE CANAL</b>, elige qué pad controla cada fader (CC 48–55).</li>
+            <li>Para el master, pulsa <b>Asignar</b> y mueve el fader físico que quieras usar como volumen general; <b>Quitar</b> lo libera.</li>
+            <li>También puedes asignar un fader desde el menú contextual de un pad.</li>
+            <li>Todos los botones empiezan <b>sin asignar</b> y no encienden LEDs: solo los pads muestran estado luminoso. <b>Quitar todo</b> los deja de nuevo sin asignar.</li>
+          </ul>
+        </section>
+
+        <section class="help-section">
+          <h3>Control remoto</h3>
+          <ul>
+            <li>Pulsa <b>Remoto</b> para ver las direcciones de acceso desde un teléfono, tablet u otro PC de la misma red.</li>
+            <li>Abre una dirección en el navegador: verás los 64 pads, el master y los botones de detener todo y reiniciar.</li>
+            <li>El audio y el controlador MIDI siguen en este equipo; el navegador solo envía órdenes.</li>
+            <li>Permite el acceso a Electron en el firewall de Windows (redes privadas) la primera vez.</li>
+          </ul>
+        </section>
+
+        <section class="help-section">
+          <h3>Proyectos y actuación</h3>
+          <ul>
+            <li><b>Nuevo proyecto</b> vacía los pads y las asignaciones, y deja el master al 100 %.</li>
+            <li><b>Guardar proyecto…</b> exporta un archivo <code>.json</code> con pistas, volúmenes, faders y asignaciones.</li>
+            <li><b>Detener todo</b> para todas las pistas; <b>Parar última</b> detiene la que empezó más recientemente.</li>
+            <li><b>Reiniciar LEDs</b> deja las pistas cargadas en amarillo y limpia mutes y estados de reproducción.</li>
+          </ul>
+        </section>
+
+        <section class="help-section">
+          <h3>Atajos</h3>
+          <ul>
+            <li><code>Esc</code> cancela la asignación de un fader o el movimiento de una pista.</li>
+            <li>Con un fader enfocado: flechas, <code>Page Up/Page Down</code>, <code>Home</code> y <code>End</code> ajustan su valor.</li>
+          </ul>
+        </section>
+      </div>
+
+      <div class="modal-actions">
+        <button class="btn btn-primary" id="helpClose" type="button">Cerrar</button>
+      </div>
+    </div>
+  </dialog>
+
+  <script src="demo-bridge.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

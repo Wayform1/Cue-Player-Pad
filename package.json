@@ -1,0 +1,82 @@
+{
+  "name": "cue-player-pad",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Reproductor de cues de 64 pads con Electron, Web Audio y Web MIDI",
+  "main": "main.js",
+  "desktopName": "cue-player-pad.desktop",
+  "scripts": {
+    "start": "electron .",
+    "preview": "node tools/preview-server.js",
+    "dist": "electron-builder",
+    "dist:win": "electron-builder --win",
+    "dist:linux": "electron-builder --linux"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "electron": "^45.3.2",
+    "electron-builder": "^26.18.0"
+  },
+  "build": {
+    "appId": "com.cueplayerpad.app",
+    "productName": "CUE PLAYER PAD",
+    "asar": true,
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "remote-server.js",
+      "remote/**/*",
+      "renderer/**/*",
+      "package.json"
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "CUE PLAYER PAD"
+    },
+    "portable": {
+      "artifactName": "CUE-Player-Pad-${version}-portable.exe"
+    },
+    "linux": {
+      "icon": "build/icon.png",
+      "category": "AudioVideo",
+      "executableName": "cue-player-pad",
+      "syncDesktopName": true,
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "CUE-Player-Pad-${version}-${arch}.${ext}"
+    }
+  }
+}
