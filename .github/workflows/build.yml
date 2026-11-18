@@ -1,5 +1,4 @@
-name: Build
-        run: ${{ matrix.command }} -- --publish never
+name: Build distributables
 
 on:
   workflow_dispatch:
@@ -36,7 +35,7 @@ jobs:
         run: npm ci
 
       - name: Build
-        run: ${{ matrix.command }}
+        run: ${{ matrix.command }} -- --publish never
 
       - name: Upload installers
         uses: actions/upload-artifact@v4
