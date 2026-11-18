@@ -2,7 +2,7 @@
 
 Reproductor de cues de 64 pads para **Node.js + Electron**, a partir del sampler original en Python/Tkinter.
 
-La interfaz ocupa toda la ventana: cuadrícula 8×8 de pads, columna de escenas a la derecha, botones de pista sobre los faders, Shift junto al fader master y ocho faders de canal. El master es un riel vertical a la izquierda. El panel **Asignar funciones** está oculto por defecto y se abre como cajón lateral para elegir qué hace cada botón y cada fader, de modo que los pads aprovechan todo el ancho. Los 17 botones que no son pads empiezan **sin asignar** y no encienden LEDs.
+La interfaz ocupa toda la ventana: cuadrícula 8×8 de pads, columna de escenas a la derecha, botones de pista sobre los faders, Shift junto al fader master y ocho faders de canal. El master es un riel vertical a la izquierda. El panel **Asignar funciones** está oculto por defecto y se abre como cajón lateral para elegir qué hace cada botón y cada fader, de modo que los pads aprovechan todo el ancho. Los 17 botones que no son pads empiezan **sin asignar**; los botones de pista y escena encienden su LED cuando tienen una función, mientras que Shift solo se resalta en la interfaz porque el APC mini no tiene LED en ese botón. Los botones de pista y escena se dibujan redondos; Shift mantiene forma rectangular.
 
 También incluye **control remoto por web**: un teléfono, una tablet u otro ordenador de la misma red pueden abrir la página de control y manejar pads, master y las acciones principales, mientras el audio y el controlador MIDI siguen conectados al equipo anfitrión.
 
@@ -14,7 +14,7 @@ También incluye **control remoto por web**: un teléfono, una tablet u otro ord
 - Menú contextual por pad: cargar/reemplazar, reproducir/detener, silenciar, renombrar, editar volumen, asignar/quitar fader, mover y vaciar.
 - Panel **Asignar funciones** para botones, faders de canal y fader master, oculto por defecto y abierto como cajón lateral.
 - Botón **Asignar funciones** en la barra superior; el panel se cierra con la ✕, con `Esc` o tocando fuera.
-- **Control remoto** desde el navegador de un teléfono, tablet u otro PC de la misma red: 64 pads, master, mute, detener todo y reiniciar LEDs.
+- **Control remoto** desde el navegador de un teléfono, tablet u otro PC de la misma red: 64 pads, master, mute, detener todo y reiniciar LEDs, sin instalar nada ni introducir códigos.
 - Página remota adaptable, pensada para pantallas táctiles, con el estado actualizado en tiempo real.
 - Silencio independiente por pista, con indicador visual en el pad.
 - Volumen general con fader vertical, teclado y rueda del ratón.
@@ -27,7 +27,7 @@ También incluye **control remoto por web**: un teléfono, una tablet u otro ord
 - **Guardar proyecto…** para exportar la sesión completa a un archivo JSON.
 - Pantalla de carga con barra de porcentaje.
 - **Ayuda** con el manual básico integrado.
-- Retroalimentación de LEDs solo en los pads: los botones de control permanecen apagados.
+- Retroalimentación de LEDs en los pads y en los botones de pista y escena asignados; los que están sin asignar permanecen apagados. Shift se resalta en la interfaz, pero el APC mini no tiene LED físico en ese botón.
 - Espectro de frecuencias en tiempo real.
 - Persistencia automática de pistas, volúmenes, nombres, faders, master y asignaciones en `pads.json`.
 - Migración automática del `pads.json` de versiones anteriores.
@@ -96,22 +96,43 @@ Se generan dos archivos:
 
 El ejecutable portable sigue guardando la configuración en `%APPDATA%\CUE PLAYER PAD\pads.json`, así que no es portable al 100 %: los archivos de audio y la configuración no viajan dentro del `.exe`.
 
-### Linux
+### Linux (AppImage)
 
-El AppImage debe generarse en Linux o mediante GitHub Actions; compilarlo directamente desde Windows falla por la creación de enlaces simbólicos. En un equipo Linux:
+El AppImage se genera con:
 
 ```bash
 npm ci
-npm run dist:linux
-chmod +x dist/CUE-Player-Pad-*-x86_64.AppImage
-./dist/CUE-Player-Pad-*-x86_64.AppImage
+npm run dist:appimage
 ```
 
-El resultado es un único archivo `.AppImage`. Para abrirlo con doble clic, marca «Permitir ejecutar como programa» en las propiedades del archivo. En Ubuntu 22.04 o superior puede hacer falta instalar FUSE:
+El resultado es `dist/CUE-Player-Pad-2.0.0-x86_64.AppImage`. Para abrirlo con doble clic, marca «Permitir ejecutar como programa» en las propiedades del archivo. En Ubuntu 22.04 o superior puede hacer falta instalar FUSE:
 
 ```bash
 sudo apt install libfuse2
 ```
+
+`npm run dist:linux` sigue disponible y genera el mismo AppImage junto con el resto de objetivos de Linux configurados.
+
+#### Generar el AppImage desde Windows o macOS
+
+Windows no puede crear los enlaces simbólicos que necesita el AppImage, así que se compila dentro de Docker:
+
+1. Instala [Docker Desktop](https://www.docker.com/products/docker-desktop/) y arráncalo.
+2. En la carpeta del proyecto ejecuta:
+
+```powershell
+npm run dist:appimage
+```
+
+El script detecta que no está en Linux y usa la imagen `electronuserland/builder:latest`, monta el proyecto y deja el `.AppImage` en `dist/`. La primera vez descarga la imagen y las dependencias; las siguientes compilaciones reutilizan las cachés de npm y Electron.
+
+Si prefieres forzar Docker también en Linux:
+
+```bash
+npm run dist:appimage -- --docker
+```
+
+Sin Docker, quedan dos alternativas: compilar en un equipo Linux o usar GitHub Actions.
 
 ### Compilar Windows y Linux automáticamente
 
@@ -146,7 +167,7 @@ Los ejecutables no están firmados digitalmente. Windows puede mostrar «Windows
 | **Nuevo proyecto** | Pide confirmación y vacía pads, mutes, faders y asignaciones. |
 | **Guardar proyecto…** | Exporta la sesión actual a un `.json` con un diálogo nativo. |
 | **Asignar funciones** | Abre o cierra el cajón lateral con los selectores de botones y faders. |
-| **Remoto** | Muestra las direcciones de acceso desde otros dispositivos y el código de la sesión. |
+| **Remoto** | Muestra las direcciones de acceso desde otros dispositivos de la red. |
 | **Ayuda** | Abre el manual básico. |
 | Botón **Reiniciar LEDs y estados** | Detiene todo y deja las pistas cargadas en amarillo. |
 | Clic en un fader de canal | Asigna el volumen de la pista asociada a ese CC. |
@@ -196,7 +217,8 @@ La distribución sigue al APC mini MK1:
 - Cada botón se puede asignar desde el panel **Asignar funciones** o con clic derecho sobre él. Hay acciones de escena y columna, del pad seleccionado, del master y de navegación, además de **Sin asignar**.
 - Al empezar, todos los botones están en **Sin asignar**: elige tú qué hace cada uno, por ejemplo reiniciar LEDs y estados o detener todo.
 - **Quitar todo** deja de nuevo los 17 botones sin asignar.
-- Los botones de control **no encienden LEDs** al asignarlos: la retroalimentación luminosa se reserva a los pads.
+- Los botones de pista y escena **encienden su LED** cuando tienen una función asignada; al volver a **Sin asignar** se apagan. Shift se resalta en la pantalla, pero el APC mini no tiene LED en ese botón.
+- Los botones de pista y escena se dibujan redondos en la interfaz; Shift mantiene forma rectangular.
 
 ### Mapa MIDI del APC mini MK1
 
@@ -218,26 +240,28 @@ Estados de LED usados en los pads:
 | Sonando | 2 (verde, parpadeo del propio APC) |
 | Detenido | 3 (rojo) |
 
-Los botones de pista, escena y Shift **no encienden LEDs** en esta aplicación, estén asignados o no. Solo los pads muestran estado luminoso.
+Los botones de pista y escena encienden un LED fijo cuando tienen una función asignada; los que están en **Sin asignar** permanecen apagados. El LED no distingue la función concreta, solo indica que el botón está configurado.
 
-El botón de reinicio deja los pads cargados en amarillo (5), los vacíos apagados (0) y vuelve a apagar cualquier LED de control.
+El botón **Shift** del APC mini no tiene LED físico, así que la aplicación no puede encenderlo. Al asignarle una función, Shift se resalta en la interfaz con el mismo estilo que los botones asignados; el mensaje MIDI de la nota 98 sigue enviándose, pero el controlador no lo muestra.
+
+El botón de reinicio deja los pads cargados en amarillo (5), los vacíos apagados (0) y vuelve a encender solo los LEDs de los botones asignados.
 
 ## Control remoto
 
 El equipo donde está conectado el controlador MIDI puede compartir una página de control con otros dispositivos de la misma red.
 
 1. Pulsa **Remoto** en la barra superior.
-2. El diálogo muestra el estado del servidor, el puerto, el código de la sesión y las direcciones disponibles (`Este equipo` y cada interfaz de red, normalmente la Wi-Fi).
+2. El diálogo muestra el estado del servidor, el puerto y las direcciones disponibles (`Este equipo` y cada interfaz de red, normalmente la Wi-Fi).
 3. Copia una de las direcciones y ábrela en el navegador del teléfono, la tablet u otro PC. También puedes escribirla a mano si el otro dispositivo no puede copiarla.
 
-La dirección incluye el código de acceso, por ejemplo:
+La dirección es directa, sin contraseña ni código, por ejemplo:
 
 ```text
-http://192.168.1.18:8787/?k=f0ac6ac3
+http://192.168.1.18:8787/
 ```
 
 - El servidor escucha en el puerto **8787**. Si está ocupado, prueba los siguientes hasta el 8796 y muestra el puerto real en el diálogo.
-- El código de acceso son 8 caracteres aleatorios y **cambia cada vez que abres la aplicación**; una dirección antigua deja de funcionar. Vuelve a abrir **Remoto** para obtener la nueva.
+- No hay clave de acceso: cualquier dispositivo de la red que abra la dirección puede controlar la reproducción. Está pensado para una **red cerrada o de confianza** (la Wi-Fi del local, una LAN aislada, etc.).
 - Los dos dispositivos deben estar en la misma red (misma Wi-Fi o LAN). No se necesita instalar nada en el teléfono ni en la tablet.
 
 ### Qué se puede hacer desde la página remota
@@ -253,7 +277,7 @@ La página remota **no** carga archivos, no renombra pads, no asigna funciones n
 
 - La primera vez, Windows puede preguntar si permites a Electron comunicarse en la red. Marca **Redes privadas**.
 - Si el dispositivo no conecta, comprueba que está en la misma red, que la red está marcada como privada en Windows y que el router no aísla a los clientes entre sí (aislamiento de AP).
-- La página usa HTTP sin cifrar dentro de la red local. El código de la URL evita accesos casuales, pero no la publiques fuera de tu red ni abras el puerto en el router.
+- La página usa HTTP sin cifrar y sin autenticación dentro de la red local. No la publiques fuera de tu red ni abras el puerto en el router; si necesitas control desde fuera, usa una VPN.
 
 ## Configuración
 
@@ -357,6 +381,7 @@ renderer/
   demo-bridge.js            Modo demostración para navegador
 tools/
   preview-server.js         Servidor estático para la vista previa
+  build-appimage.js         Generación del AppImage en Linux o con Docker
 .github/workflows/
   build.yml                 Compilación automática para Windows y Linux
 ```
@@ -384,11 +409,14 @@ Después vuelve a ejecutar `npm start`. En Windows, si `node` no está en el PAT
 
 Este proyecto usa el mapa de LEDs del MK1. En el MK2 los pads y faders suelen responder, pero algunos colores o modos de parpadeo pueden diferir. La barra de estado avisa cuando detecta un MK2.
 
+### El botón Shift no enciende ningún LED
+
+Es normal: el **APC mini no tiene LED en el botón Shift**, así que ningún programa puede encenderlo. En esta aplicación Shift se resalta en la pantalla cuando tiene una función asignada, igual que los botones de pista y escena, pero el LED físico no existe. Usa otro de los 16 botones redondos si necesitas confirmación luminosa en el controlador.
+
 ### El control remoto no abre en el teléfono
 
 - Comprueba que el teléfono y el PC están en la misma red Wi-Fi o LAN.
-- Abre la dirección completa, incluido `?k=…`: sin el código, el servidor responde con error.
-- El código cambia cada vez que reinicias la aplicación. Vuelve a pulsar **Remoto** para copiar la dirección actual.
+- Abre exactamente la dirección que muestra **Remoto**, con el puerto correcto.
 - Permite a Electron en el firewall de Windows y marca la red como privada.
 - Si el puerto 8787 estaba ocupado, el diálogo muestra el puerto real; usa esa dirección.
 - Algunos routers aíslan a los clientes Wi-Fi entre sí o separan la red de invitados: en ese caso el teléfono no verá al PC.
@@ -416,7 +444,7 @@ En modo desarrollo, pulsa `F12` o `Ctrl+Shift+I` para abrir las herramientas de 
 - CSP sin scripts inline ni conexiones externas.
 - El renderer solo puede usar las operaciones IPC expuestas por `preload.js`: elegir archivo, leer audio, cargar/guardar configuración, consultar la ruta y exportar un proyecto con diálogo nativo.
 - La lectura de audio está limitada a archivos de hasta 512 MB.
-- El servidor remoto exige el código de sesión en la URL (`?k=`) tanto para el flujo de estado como para las órdenes; las peticiones sin código válido reciben `403`.
+- El servidor remoto no pide contraseña y escucha en la red local; está pensado para redes cerradas o de confianza. No lo expongas directamente a Internet.
 - Solo se aceptan las órdenes `toggle`, `mute`, `stop_all`, `reset`, `master_mute` y `master` con notas 0–63 y volúmenes 0–1; el resto se rechaza con `400`. El servidor también limita el tamaño de las órdenes y el número de clientes conectados.
 - La página remota se sirve desde la carpeta `remote` con una CSP propia y sin acceso al sistema de archivos ni al puente de Electron.
 - El servidor remoto no se inicia en el modo de vista previa del navegador.
@@ -429,8 +457,9 @@ En modo desarrollo, pulsa `F12` o `Ctrl+Shift+I` para abrir las herramientas de 
 - Las escenas y los botones de pista trabajan sobre filas y columnas completas; no hay escenas guardadas con nombre ni cambios de tempo.
 - Las rutas de audio son absolutas: si mueves o borras el archivo, el pad aparecerá vacío y se avisará en la barra de estado; la entrada se conserva en `pads.json` hasta que cargues otra pista en ese pad.
 - El modo demostración no permite elegir archivos del disco.
-- El control remoto funciona por HTTP dentro de la red local, sin cifrado ni acceso desde Internet, y el código de acceso cambia en cada arranque.
+- El control remoto funciona por HTTP dentro de la red local, sin cifrado, sin contraseña y sin acceso desde Internet.
 - Desde la página remota solo se reproducen pads, se ajusta el master y se usan mute, detener todo y reiniciar LEDs; la carga de archivos, el renombrado, las asignaciones y los proyectos siguen en la ventana de Electron.
+- El AppImage no se puede compilar directamente en Windows: usa Docker, un equipo Linux o GitHub Actions.
 
 ## Créditos
 

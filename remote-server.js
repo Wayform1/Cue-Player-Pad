@@ -1,6 +1,5 @@
 'use strict';
 
-const crypto = require('node:crypto');
 const fsp = require('node:fs/promises');
 const http = require('node:http');
 const os = require('node:os');
@@ -21,13 +20,6 @@ const MIME_TYPES = {
   '.png': 'image/png',
   '.ico': 'image/x-icon',
 };
-
-function safeEqual(a, b) {
-  const left = Buffer.from(String(a));
-  const right = Buffer.from(String(b));
-  if (left.length !== right.length) return false;
-  return crypto.timingSafeEqual(left, right);
-}
 
 function readJsonBody(req) {
   return new Promise((resolve, reject) => {
@@ -72,7 +64,6 @@ class RemoteServer {
     this.onStatus = onStatus;
     this.server = null;
     this.port = null;
-    this.token = crypto.randomBytes(4).toString('hex');
     this.error = null;
     this.lastState = null;
     this.clients = new Set();
@@ -84,7 +75,7 @@ class RemoteServer {
       return { enabled: false, error: this.error || 'El servidor no está iniciado' };
     }
 
-    const base = (host) => `http://${host}:${this.port}/?k=${this.token}`;
+    const base = (host) => `http://${host}:${this.port}/`;
     const urls = [{ label: 'Este equipo', url: base('127.0.0.1') }];
 
     for (const item of lanAddresses()) {
@@ -97,7 +88,6 @@ class RemoteServer {
     return {
       enabled: true,
       port: this.port,
-      token: this.token,
       urls,
     };
   }
@@ -199,10 +189,6 @@ class RemoteServer {
     }
   }
 
-  authorized(url) {
-    return safeEqual(url.searchParams.get('k') || '', this.token);
-  }
-
   async handle(req, res) {
     const url = new URL(req.url, 'http://localhost');
     const headers = {
@@ -217,12 +203,12 @@ class RemoteServer {
     }
 
     if (url.pathname === '/api/events') {
-      this.handleEvents(req, res, url, headers);
+      this.handleEvents(req, res, headers);
       return;
     }
 
     if (url.pathname === '/api/command') {
-      await this.handleCommand(req, res, url, headers);
+      await this.handleCommand(req, res, headers);
       return;
     }
 
@@ -240,13 +226,7 @@ class RemoteServer {
     res.end('No encontrado');
   }
 
-  handleEvents(req, res, url, headers) {
-    if (!this.authorized(url)) {
-      res.writeHead(403, { ...headers, 'content-type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ error: 'Código de acceso incorrecto' }));
-      return;
-    }
-
+  handleEvents(req, res, headers) {
     if (this.clients.size >= MAX_CLIENTS) {
       res.writeHead(503, { ...headers, 'content-type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ error: 'Demasiados clientes conectados' }));
@@ -272,13 +252,7 @@ class RemoteServer {
     });
   }
 
-  async handleCommand(req, res, url, headers) {
-    if (!this.authorized(url)) {
-      res.writeHead(403, { ...headers, 'content-type': 'application/json; charset=utf-8' });
-      res.end(JSON.stringify({ error: 'Código de acceso incorrecto' }));
-      return;
-    }
-
+  async handleCommand(req, res, headers) {
     let command;
     try {
       command = await readJsonBody(req);

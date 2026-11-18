@@ -462,7 +462,7 @@ input:focus-visible {
   display: grid;
   flex: 1;
   grid-template-columns: repeat(8, minmax(0, 1fr)) minmax(50px, 0.72fr);
-  grid-template-rows: repeat(8, minmax(0, 1fr)) 32px minmax(96px, 0.62fr);
+  grid-template-rows: repeat(8, minmax(0, 1fr)) 56px minmax(96px, 0.62fr);
   gap: 6px;
   min-width: 0;
   min-height: 0;
@@ -708,12 +708,31 @@ input:focus-visible {
   transform: translateY(1px);
 }
 
+.hw-track,
+.hw-scene {
+  align-self: center;
+  justify-self: center;
+  width: auto;
+  max-width: 100%;
+  height: 100%;
+  aspect-ratio: 1;
+  align-items: center;
+  justify-content: center;
+  padding: 5px;
+  border-radius: 50%;
+  text-align: center;
+}
+
 .hw-scene,
 .hw-shift {
   align-items: center;
   justify-content: center;
   padding: 4px;
   text-align: center;
+}
+
+.hw-shift {
+  border-radius: 12px;
 }
 
 .hw-note {
@@ -740,6 +759,23 @@ input:focus-visible {
   letter-spacing: 0;
 }
 
+.hw-track .hw-action,
+.hw-scene .hw-action {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 6.5px;
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.hw-track .hw-note,
+.hw-scene .hw-note {
+  font-size: 7.5px;
+}
+
 .hw-led {
   position: absolute;
   top: 5px;
@@ -750,14 +786,23 @@ input:focus-visible {
   background: #2c3441;
 }
 
-.hw-btn.is-available {
-  border-color: rgba(245, 197, 66, 0.28);
-  color: #e8d48a;
+.hw-track .hw-led,
+.hw-scene .hw-led {
+  top: 5px;
+  right: auto;
+  left: 50%;
+  transform: translateX(-50%);
 }
 
-.hw-btn.is-available .hw-led {
+.hw-btn.is-assigned {
+  border-color: rgba(245, 197, 66, 0.55);
+  color: #f0dc9a;
+  background: linear-gradient(155deg, #2b2a1d, #17160f);
+}
+
+.hw-btn.is-assigned .hw-led {
   background: var(--amber);
-  box-shadow: 0 0 6px rgba(245, 197, 66, 0.7);
+  box-shadow: 0 0 7px rgba(245, 197, 66, 0.85);
 }
 
 .hw-btn.is-playing {
@@ -1779,7 +1824,7 @@ input:focus-visible {
   }
 
   .hardware-grid {
-    grid-template-rows: repeat(8, minmax(0, 1fr)) 28px minmax(84px, 0.56fr);
+    grid-template-rows: repeat(8, minmax(0, 1fr)) 44px minmax(84px, 0.56fr);
     gap: 5px;
     padding-top: 6px;
   }

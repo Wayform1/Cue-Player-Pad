@@ -171,9 +171,9 @@ La interfaz se reorganizó como una réplica del APC mini MK1 en lugar de una cu
 
 ### Botones que antes no se usaban
 
-El código original solo distinguía las notas 82 y 89; las notas 64–71, 83–88 y 98 no hacían nada. Ahora los 17 botones no-pad tienen una función asignable:
+El código original solo distinguía las notas 82 y 89; las notas 64–71, 83–88 y 98 no hacían nada. Ahora los 17 botones no-pad tienen una función asignable. Todos empiezan **sin asignar** y el usuario elige qué hace cada uno; estas son las acciones más habituales para cada grupo:
 
-| Botón | Notas | Acción por defecto |
+| Botón | Notas | Acción habitual |
 | --- | --- | --- |
 | Pista | 64–71 | `track_stop`: detener las pistas de su columna |
 | Escena | 82–89 | `scene_toggle`: lanzar o parar la fila de pads |
@@ -187,7 +187,7 @@ El código original solo distinguía las notas 82 y 89; las notas 64–71, 83–
 
 ### Reinicio de LEDs y estados
 
-El botón **Reiniciar LEDs y estados** (y la acción `reset_state`, asignada por defecto a Shift) realiza un reinicio de actuación:
+El botón **Reiniciar LEDs y estados** (acción `reset_state`, que el usuario puede asignar a cualquier botón del controlador) realiza un reinicio de actuación:
 
 1. Cancela los modos de asignación o movimiento en curso.
 2. Detiene todas las fuentes de audio activas y anula sus callbacks.
@@ -202,8 +202,7 @@ Los estados `playing` y `stopped` desaparecen, de modo que el equipo queda en el
 - Pad seleccionado con inspector: reproducir/detener, silenciar, cargar/reemplazar y editar volumen.
 - Mute por pista, visible con un patrón rayado y la etiqueta «M».
 - Ocho faders de canal interactivos que reflejan y modifican el volumen de la pista asociada a cada CC.
-- Los botones de pista y escena muestran LED amarillo si su fila/columna tiene pistas disponibles, verde si algo suena y apagado si no hay nada.
-- Shift muestra LED rojo cuando hay reproducciones, paradas o mutes pendientes de reiniciar.
+- Los botones de pista y escena muestran un LED fijo cuando tienen una función asignada; los que están sin asignar permanecen apagados. Shift se resalta en la interfaz, pero el APC mini no tiene LED físico en ese botón.
 - La configuración pasa a la versión 3 con el bloque `controls`; `sanitizeConfig()` valida notas de control y nombres de acción.
 
 ## Qué se conservó del original
@@ -259,7 +258,6 @@ Estos cambios no son solo correcciones: también ajustan el comportamiento para 
 - Icono propio y flujo de GitHub Actions para compilar ambos sistemas.
 - Interfaz rediseñada a pantalla completa: riel de master a la izquierda, pads en el área principal y panel **Asignar funciones** a la derecha.
 - Asignación de los 17 botones y de los 8 faders de canal desde el panel derecho, con persistencia en la configuración.
-- Los botones de control no encienden LEDs; solo los pads muestran estado luminoso.
 - Pantalla de carga con barra de porcentaje y crédito «Creado por Enrique Bao 2026».
 - Botones **Nuevo proyecto** y **Guardar proyecto…**, con diálogo de confirmación y exportación JSON nativa.
 - Manual básico integrado en el diálogo **Ayuda**.
@@ -267,8 +265,12 @@ Estos cambios no son solo correcciones: también ajustan el comportamiento para 
 - Mute por pista y menú contextual por pad.
 - El panel de asignación pasó a ser un cajón lateral oculto por defecto, abierto con el botón **Asignar funciones**, con fondo oscurecido y cierre por ✕, `Esc` o clic fuera; los pads ocupan ahora todo el ancho de la ventana.
 - Clic derecho en un botón del hardware abre el cajón y enfoca el selector correspondiente.
-- Control remoto por web desde teléfono, tablet u otro PC de la misma red: servidor HTTP/SSE en el proceso principal, token de sesión, página táctil adaptable y órdenes limitadas a pads, mute, master, detener todo y reiniciar LEDs.
-- Diálogo **Remoto** con puerto, código de sesión, dirección local y direcciones de cada interfaz de red, con botón de copiar.
+- Control remoto por web desde teléfono, tablet u otro PC de la misma red: servidor HTTP/SSE en el proceso principal, página táctil adaptable y órdenes limitadas a pads, mute, master, detener todo y reiniciar LEDs.
+- Diálogo **Remoto** con puerto, dirección local y direcciones de cada interfaz de red, con botón de copiar.
+- Los 16 botones de pista y escena encienden su LED cuando tienen una función asignada; los que están sin asignar permanecen apagados. Shift solo se resalta en la interfaz porque el controlador no tiene LED en ese botón.
+- Botones de pista y escena redondos en la interfaz; Shift mantiene forma rectangular.
+- El control remoto ya no usa una clave aleatoria: está pensado para una red cerrada o de confianza y las direcciones son directas.
+- `npm run dist:appimage` genera el AppImage en Linux y, en Windows o macOS, lo compila dentro de Docker; `--help` explica las alternativas.
 
 ## Verificación
 
@@ -276,7 +278,7 @@ Estos cambios no son solo correcciones: también ajustan el comportamiento para 
 - Comprobación de sintaxis con `node --check` de `main.js`, `preload.js`, `renderer/app.js`, `renderer/actions.js`, `renderer/midi.js`, `renderer/master-fader.js`, `renderer/utils.js`, `renderer/demo-bridge.js` y `tools/preview-server.js`.
 - Vista previa en navegador con 12 pistas sintéticas: carga inicial, reproducción y parada, fader master con ratón y teclado, menú contextual, renombrar, mover a un pad vacío, intercambiar con un pad ocupado, vaciar, asignar y quitar fader, edición de volumen con cancelar/aceptar, `Esc` para cancelar modos y persistencia en `localStorage`. Sin errores en la consola.
 - Prueba de la nueva distribución: 64 pads, 17 botones de control, 8 faders de canal, 1 master y 90 elementos en la rejilla del hardware. Sin desbordamiento a 1056×856.
-- Prueba del panel de asignación: 17 selectores de botón y 8 de fader; cambiar el botón 64 a «Detener todo» actualizó su etiqueta, lo marcó como asignado y mantuvo el LED en 0. El selector de fader reasignó correctamente el CC 48 al pad 2, liberó el fader anterior del pad y actualizó las etiquetas `F1`/`F3`.
+- Prueba del panel de asignación: 17 selectores de botón y 8 de fader; cambiar el botón 64 a «Detener todo» actualizó su etiqueta, lo marcó como asignado y encendió su LED. El selector de fader reasignó correctamente el CC 48 al pad 2, liberó el fader anterior del pad y actualizó las etiquetas `F1`/`F3`.
 - Prueba de **Nuevo proyecto**: tras confirmar, quedaron 0 pistas cargadas, 17 botones sin asignar, los 8 faders vacíos y el master al 100 %.
 - Prueba de **Ayuda**: el diálogo abrió con 5 secciones y se cerró con `Esc` sin afectar al estado.
 - Prueba de **Guardar proyecto…**: en modo demo generó el JSON de descarga; en Electron usa `dialog.showSaveDialog` y escribe el mismo esquema que la configuración más `app` y `saved_at`.
@@ -290,28 +292,36 @@ Estos cambios no son solo correcciones: también ajustan el comportamiento para 
 - Arranque de Electron con depuración remota: 64 pads, configuración leída desde `%APPDATA%\CUE PLAYER PAD\pads.json` y ninguna excepción en el renderer.
 - Instancia única comprobada: un segundo proceso de Electron salió inmediatamente mientras la primera instancia seguía abierta.
 - Empaquetado de Windows verificado con `electron-builder`: se generaron `CUE PLAYER PAD Setup 2.0.0.exe` (121 MB) y `CUE-Player-Pad-2.0.0-portable.exe` (110 MB) en `dist/` con la nueva interfaz, el panel de asignación, los proyectos, la pantalla de carga y la ayuda. Se eliminaron los artefactos antiguos con el nombre APC.
-- El ejecutable portable se arrancó con depuración remota. Migró `%APPDATA%\APC mini Sampler\pads.json` a `%APPDATA%\CUE PLAYER PAD\pads.json` conservando el archivo byte a byte (mismo hash): 2 pistas cargadas, master al 100 %, 17 selectores de botón y 8 de fader. La ventana midió 1184×781 sin desbordamiento, todos los LEDs de control permanecieron en 0 y el modo demo quedó desactivado. El título de la ventana y del documento es `CUE PLAYER PAD`.
+- El ejecutable portable se arrancó con depuración remota. Migró `%APPDATA%\APC mini Sampler\pads.json` a `%APPDATA%\CUE PLAYER PAD\pads.json` conservando el archivo byte a byte (mismo hash): 2 pistas cargadas, master al 100 %, 17 selectores de botón y 8 de fader. La ventana midió 1184×781 sin desbordamiento, los LEDs de control quedaron apagados porque no había asignaciones guardadas y el modo demo quedó desactivado. El título de la ventana y del documento es `CUE PLAYER PAD`.
 - Prueba de tamaño mínimo: la ventana empaquetada se redimensionó a 980×660 (964×621 de área útil). No hubo desbordamiento horizontal ni vertical, los 64 pads quedaron dentro de la ventana con un mínimo de 65×34 px, el panel de asignación mantuvo sus 8 selectores de fader y el riel del master se redujo a 76 px.
 - El modo demo quedó desactivado en Electron, la interfaz se sirvió con `apcsampler://` y no aparecieron excepciones en el renderer.
-- El AppImage de Linux no se pudo generar directamente desde Windows por una limitación de enlaces simbólicos (`EPERM`); se añadió el flujo de GitHub Actions y las instrucciones para compilarlo en Linux.
+- El AppImage de Linux no se puede generar directamente desde Windows por una limitación de enlaces simbólicos (`EPERM`); se añadió `npm run dist:appimage` con soporte para Linux y Docker, además del flujo de GitHub Actions.
 - Prueba funcional en Electron: lectura de un WAV real (38 444 bytes, RIFF), decodificación, reproducción, parada, guardado y recarga de la configuración. El APC mini conectado fue detectado por Web MIDI.
 
 ### Verificación del cajón de asignación y del control remoto
 
-- `node --check` de `main.js`, `remote-server.js`, `renderer/app.js`, `renderer/demo-bridge.js` y `remote/remote.js` sin errores.
+- `node --check` de `main.js`, `preload.js`, `remote-server.js`, `renderer/app.js`, `renderer/utils.js`, `renderer/demo-bridge.js`, `remote/remote.js` y `tools/build-appimage.js` sin errores.
 - Cajón cerrado al arrancar: `hidden`, `aria-hidden="true"` y `aria-expanded="false"`. La rejilla de pads midió 922 px sobre una ventana de 1056 px (antes 608 px), sin desbordamiento horizontal ni vertical.
 - Apertura con **Asignar funciones**: el cajón se deslizó hasta 360 px, el fondo oscurecido apareció, `aria-expanded` pasó a `true` y el foco se colocó en la ✕. `Esc` lo cerró y devolvió el foco al botón.
 - Clic derecho en el botón hardware 65: abrió el cajón, resaltó su fila y enfocó su selector.
 - En la vista previa del navegador, **Remoto** mostró el aviso de que solo está disponible en la aplicación de escritorio, sin errores de consola.
-- Servidor remoto: la página, `remote.css` y `remote.js` se sirvieron con `200`; un token incorrecto recibió `403` tanto en `/api/events` como en `/api/command`.
-- Estado inicial por SSE: 64 pads, 2 cargados. Las órdenes `master` cambiaron el master del escritorio de 100 % a 60 % y de vuelta a 100 %; `stop_all` detuvo las pistas reproducidas y el nuevo estado llegó por SSE.
+- Servidor remoto sin clave: la página, `remote.css` y `remote.js` se sirvieron con `200`; `/api/events` y `/api/command` funcionaron sin `?k=` y las peticiones sin código dejaron de recibir `403`.
+- Estado inicial por SSE: 64 pads y las pistas de la configuración cargada. Las órdenes `master` cambiaron el master del escritorio de 100 % a 60 % y de vuelta a 100 %; `stop_all` detuvo las pistas reproducidas y el nuevo estado llegó por SSE.
 - Las órdenes desconocidas o con parámetros fuera de rango se rechazan con `400` en el servidor y también se validan en el renderer.
-- Página remota en Edge a 390×844: 4 columnas de 85 px, pads de 85×68, botones dentro del ancho y sin desbordamiento horizontal; conexión «Conectado» y 64 pads.
-- Diálogo **Remoto** en Electron: puerto 8787, código de sesión y dos direcciones (equipo local y Wi-Fi `192.168.1.18`), con el botón de copiar.
-- Empaquetado de Windows reconstruido con el cajón y el control remoto: `CUE PLAYER PAD Setup 2.0.0.exe` (115,7 MB) y `CUE-Player-Pad-2.0.0-portable.exe` (105,3 MB).
-- Prueba del paquete `win-unpacked`: 64 pads, 2 pistas cargadas, cajón oculto, rejilla de 1036 px en una ventana de 1184×781 sin desbordamiento, 0 LEDs de control encendidos y servidor remoto activo en el puerto 8787.
-- Prueba del cajón dentro del paquete: abrió a 360 px con 25 selectores, el foco pasó a la ✕ y `Esc` lo cerró devolviendo el foco a **Asignar funciones**.
-- Prueba del ejecutable portable con depuración remota: arrancó, cargó la configuración (2 pistas, master al 100 %), sirvió la página remota y respondió `200` a `index.html`, `remote.css` y `remote.js`.
-- Órdenes contra el paquete: un token incorrecto recibió `403`; `master` cambió el volumen a 50 % y de vuelta a 100 % con los estados llegando por SSE; `shutdown`, la nota 99 y el volumen 4 se rechazaron con `400`.
+- Página remota con viewport emulado de 390×844: `innerWidth` y `scrollWidth` de 390 px, 4 columnas, el botón más ancho termina en 376 px, conexión «Conectado» y solo desplazamiento vertical.
+- Diálogo **Remoto** en Electron: puerto 8787 y dos direcciones (equipo local y Wi-Fi `192.168.1.18`), sin código de acceso.
+- Botones de pista y escena redondos (56×56 y 44×44 px, `border-radius: 50%`) y Shift rectangular (82×56, 12 px). Al asignar «Detener todo» al botón 64 y «Lanzar o parar escena» al 82, ambos pasaron a `is-assigned`, con `data-led="1"`. Shift también pasó a `is-assigned` con `data-led="1"` al asignarle «Reiniciar LEDs y estados», y volvió a `data-led="0"` al ponerlo en «Sin asignar»; los botones sin asignar mantuvieron `data-led="0"`. Ese `data-led="1"` de Shift es solo un indicador de la interfaz: la nota 98 con velocidad 1 se envía al controlador, pero el LED físico no existe.
+- Empaquetado de Windows reconstruido con los LEDs, los botones redondos, el remoto sin clave y el script de AppImage: `CUE PLAYER PAD Setup 2.0.0.exe` (115,7 MB) y `CUE-Player-Pad-2.0.0-portable.exe` (105,3 MB).
+- Prueba del paquete `win-unpacked`: 64 pads, 36 pistas cargadas, pantalla de carga terminada en «Listo», cajón oculto, LEDs de los botones de pista y escena asignados (`82:1`, `89:1`) con el resto en `0`, Shift rectangular y resaltado como asignado en la interfaz, sin desbordamiento horizontal ni vertical.
+- Cajón dentro del paquete: abrió a 360 px con 25 selectores y el foco en la ✕; al cerrarlo, el foco volvió a **Asignar funciones**, `hidden` y `aria-expanded="false"`.
+- Contra el paquete, el servidor remoto respondió `200` a `index.html`, `remote.css`, `remote.js` y `/api/events` sin clave; `master` cambió el volumen a 50 % y de vuelta a 100 % con los estados llegando por SSE; `shutdown`, la nota 99 y el volumen 4 se rechazaron con `400`.
+- `npm run dist:appimage -- --help` mostró las instrucciones y, sin Docker en este equipo, el script terminó con un mensaje claro y código 1 en lugar de fallar con `EPERM`.
+
+### Comprobación del LED de Shift
+
+- El controlador conectado en este equipo es un **APC MINI MK1** (`APC MINI`, `mk2=false`), con entrada y salida MIDI conectadas.
+- Se envió la nota 98 con velocidad 1 al asignar una función a Shift y no se produjo ningún cambio visible en el botón físico.
+- El protocolo de Akai para el APC mini mk2 lista el botón Shift con LED `None`; el APC Key 25 mk2 hace lo mismo con su Shift. La documentación de la comunidad y las fotos del panel MK1 coinciden: los 16 botones redondos tienen ventana de LED y el botón Shift es opaco.
+- **Conclusión:** el APC mini no tiene LED direccionable en Shift. La aplicación mantiene el resaltado `is-assigned`/`data-led="1"` en pantalla como indicador y sigue enviando la nota 98 por compatibilidad, pero el hardware no puede encenderlo. El texto de ayuda, el README y los comentarios del código se ajustaron para no prometer un LED que no existe.
 
 Las pruebas con hardware APC mini real dependen de que el controlador esté conectado al equipo. La detección y la entrada/salida MIDI se comprobaron con el controlador conectado; la revisión visual de todos los estados de LED sigue siendo recomendable antes de usar la aplicación en directo.

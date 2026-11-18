@@ -18,6 +18,7 @@ import {
   sceneRowFor,
 } from './actions.js';
 import {
+  CONTROL_LED,
   DEFAULT_HINT,
   LED,
   MASTER_CC_DEFAULT,
@@ -421,20 +422,26 @@ function syncAllLeds() {
   updateControlLeds();
 }
 
-// Los botones del hardware no encienden LEDs: solo los pads muestran estado.
+// Los pads muestran su estado; los botones de pista y escena encienden su LED
+// cuando tienen una función asignada. Shift se marca en la interfaz, pero el
+// APC mini no tiene LED físico en ese botón.
 function renderControl(note) {
   const view = ui.controlButtons.get(note);
   if (!view) return;
 
   const action = state.controls[note];
   const info = actionInfo(action);
+  const assigned = Boolean(action) && action !== 'none';
+  const lit = assigned;
+  const velocity = lit ? CONTROL_LED.assigned : CONTROL_LED.off;
 
   view.noteEl.textContent = note === SHIFT_NOTE ? 'SHIFT' : String(note);
   view.actionEl.textContent = info.short;
   view.el.title = `${controlTitle(note)} · nota ${note}\n${info.label}`;
-  view.el.dataset.led = '0';
-  view.el.classList.remove('is-available', 'is-playing', 'is-alert');
-  view.el.classList.toggle('is-unassigned', !action || action === 'none');
+  view.el.dataset.led = String(velocity);
+  view.el.classList.remove('is-playing', 'is-alert');
+  view.el.classList.toggle('is-assigned', lit);
+  view.el.classList.toggle('is-unassigned', !assigned);
   view.el.setAttribute('aria-label', `${controlTitle(note)}, ${info.label}`);
 }
 
@@ -445,7 +452,8 @@ function renderControls() {
 function updateControlLeds() {
   for (const note of CONTROL_NOTES) {
     renderControl(note);
-    midi?.led(note, 0);
+    const velocity = Number(ui.controlButtons.get(note)?.el.dataset.led || CONTROL_LED.off);
+    midi?.led(note, velocity);
   }
 }
 
@@ -2219,7 +2227,7 @@ async function openRemoteDialog() {
   }
 
   ui.remoteStatus.classList.add('is-on');
-  ui.remoteStatus.textContent = `Servidor activo en el puerto ${info.port} · código ${info.token}`;
+  ui.remoteStatus.textContent = `Servidor activo en el puerto ${info.port}`;
 
   for (const item of info.urls || []) {
     ui.remoteList.append(remoteRow(item.label, item.url));

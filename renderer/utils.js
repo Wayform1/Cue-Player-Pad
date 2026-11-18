@@ -10,6 +10,13 @@ export const LED = Object.freeze({
   stopped: 3,  // rojo
 });
 
+// Botones de pista y escena: LED encendido cuando tienen una función asignada.
+// El APC mini no tiene LED en Shift; ese botón solo se marca en la interfaz.
+export const CONTROL_LED = Object.freeze({
+  off: 0,
+  assigned: 1,
+});
+
 export const STATUS_LABEL = {
   empty: 'vacío',
   loading: 'cargando',

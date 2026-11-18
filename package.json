@@ -10,7 +10,8 @@
     "preview": "node tools/preview-server.js",
     "dist": "electron-builder",
     "dist:win": "electron-builder --win",
-    "dist:linux": "electron-builder --linux"
+    "dist:linux": "electron-builder --linux",
+    "dist:appimage": "node tools/build-appimage.js"
   },
   "engines": {
     "node": ">=20"

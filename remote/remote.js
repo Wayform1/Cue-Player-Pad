@@ -1,9 +1,6 @@
 'use strict';
 
 (() => {
-  const params = new URLSearchParams(location.search);
-  const token = params.get('k') || '';
-
   const conn = document.getElementById('conn');
   const connText = document.getElementById('connText');
   const grid = document.getElementById('grid');
@@ -41,8 +38,7 @@
   }
 
   function sendCommand(command) {
-    if (!token) return Promise.resolve(false);
-    return fetch(`/api/command?k=${encodeURIComponent(token)}`, {
+    return fetch('/api/command', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(command),
@@ -153,13 +149,7 @@
   }
 
   function connect() {
-    if (!token) {
-      setConnection('error', 'Falta el código');
-      showToast('Abre la dirección completa que muestra la aplicación (incluye ?k=…).', true);
-      return;
-    }
-
-    const source = new EventSource(`/api/events?k=${encodeURIComponent(token)}`);
+    const source = new EventSource('/api/events');
     source.addEventListener('open', () => setConnection('on', 'Conectado'));
     source.addEventListener('message', (event) => {
       try {
@@ -214,7 +204,7 @@
   setTimeout(() => {
     if (!receivedState) {
       setConnection('error', 'Sin conexión');
-      showToast('No se pudo conectar. Comprueba la red y el código de acceso.', true);
+      showToast('No se pudo conectar. Comprueba que el equipo y el dispositivo estén en la misma red.', true);
     }
   }, 6000);
 })();
