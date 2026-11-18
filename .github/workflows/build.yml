@@ -1,4 +1,5 @@
-name: Build distributables
+name: Build
+        run: ${{ matrix.command }} -- --publish never
 
 on:
   workflow_dispatch:
