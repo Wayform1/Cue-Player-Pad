@@ -259,7 +259,7 @@ Estos cambios no son solo correcciones: también ajustan el comportamiento para 
 - Interfaz rediseñada a pantalla completa: riel de master a la izquierda, pads en el área principal y panel **Asignar funciones** a la derecha.
 - Asignación de los 17 botones y de los 8 faders de canal desde el panel derecho, con persistencia en la configuración.
 - Pantalla de carga con barra de porcentaje y crédito «Creado por Enrique Bao 2026».
-- Botones **Nuevo proyecto** y **Guardar proyecto…**, con diálogo de confirmación y exportación JSON nativa.
+- Botones **Nuevo proyecto**, **Abrir proyecto…** y **Guardar proyecto…**; el guardado usa un contenedor `.cuepad` autocontenido con los audios y el hash de cada pista.
 - Manual básico integrado en el diálogo **Ayuda**.
 - Botón de reinicio de LEDs y estados, más **Detener todo** y **Parar última** en la barra superior.
 - Mute por pista y menú contextual por pad.
@@ -281,7 +281,7 @@ Estos cambios no son solo correcciones: también ajustan el comportamiento para 
 - Prueba del panel de asignación: 17 selectores de botón y 8 de fader; cambiar el botón 64 a «Detener todo» actualizó su etiqueta, lo marcó como asignado y encendió su LED. El selector de fader reasignó correctamente el CC 48 al pad 2, liberó el fader anterior del pad y actualizó las etiquetas `F1`/`F3`.
 - Prueba de **Nuevo proyecto**: tras confirmar, quedaron 0 pistas cargadas, 17 botones sin asignar, los 8 faders vacíos y el master al 100 %.
 - Prueba de **Ayuda**: el diálogo abrió con 5 secciones y se cerró con `Esc` sin afectar al estado.
-- Prueba de **Guardar proyecto…**: en modo demo generó el JSON de descarga; en Electron usa `dialog.showSaveDialog` y escribe el mismo esquema que la configuración más `app` y `saved_at`.
+- Prueba de **Guardar proyecto…** (versión anterior): usaba un diálogo nativo y escribía un JSON con el esquema de la configuración. La versión actual lo sustituye por el contenedor `.cuepad` descrito más abajo; el modo demo ya no descarga un JSON.
 - Prueba de la pantalla de carga: mostró el avance por etapas y por pista (1/12 … 12/12), llegó al 100 % y se ocultó con el crédito visible; después, 12 pads cargados y 0 errores de consola.
 - Prueba de escenas y pistas (versión anterior con botones asignados): el botón de escena 89 lanzó los 4 pads cargados de la fila 0; el botón de pista 64 detuvo solo el pad de su columna.
 - Prueba del reinicio: con 3 pistas sonando y 1 parada, Shift (98) dejó 12 pads cargados en amarillo, 0 sonando, 0 parados y sin mutes.
@@ -323,5 +323,21 @@ Estos cambios no son solo correcciones: también ajustan el comportamiento para 
 - Se envió la nota 98 con velocidad 1 al asignar una función a Shift y no se produjo ningún cambio visible en el botón físico.
 - El protocolo de Akai para el APC mini mk2 lista el botón Shift con LED `None`; el APC Key 25 mk2 hace lo mismo con su Shift. La documentación de la comunidad y las fotos del panel MK1 coinciden: los 16 botones redondos tienen ventana de LED y el botón Shift es opaco.
 - **Conclusión:** el APC mini no tiene LED direccionable en Shift. La aplicación mantiene el resaltado `is-assigned`/`data-led="1"` en pantalla como indicador y sigue enviando la nota 98 por compatibilidad, pero el hardware no puede encenderlo. El texto de ayuda, el README y los comentarios del código se ajustaron para no prometer un LED que no existe.
+
+### Formato de proyecto `.cuepad`
+
+- Se añadió `project-format.js`, un contenedor binario propio con firma `CUEPAD01`, versión de formato y cabecera JSON.
+- La cabecera guarda la configuración completa (pads, nombres, volúmenes, mutes, faders, master y asignaciones) y una lista de audios con tamaño, tipo MIME y SHA-256. Los audios se escriben a continuación, en el mismo orden.
+- Las rutas absolutas originales no se incluyen en el proyecto: cada pad apunta a una marca `@audio:<nota>` que se resuelve al extraer.
+- **Guardar proyecto…** crea el `.cuepad` con escritura temporal y renombrado atómico. Si un audio no se puede leer, se omite y se devuelve la lista de pads afectados; el proyecto sigue siendo válido.
+- **Abrir proyecto…** valida firma, versión, límites (512 MB por audio, 4 GB total), pads 0–63, identificador seguro y SHA-256 de cada audio. Después extrae a `<userData>/proyectos/<id>/` y devuelve la configuración con las rutas extraídas.
+- El renderer reemplaza la sesión actual, carga las pistas extraídas y vuelve a programar el autoguardado. Si ya había contenido, el proceso principal pide confirmación antes de abrir el diálogo.
+- La UI incorpora **Abrir proyecto…**, la ayuda y el README explican el formato, y el modo demo ya no genera un JSON de descarga.
+- Prueba `node tools/test-project-format.js`: 2 audios incrustados, 1 pista inexistente omitida, cabecera sin rutas absolutas, extracción byte a byte idéntica, configuración y controles conservados, y rechazo de un proyecto con un byte alterado o con firma incorrecta.
+- Verificación de sintaxis de `project-format.js`, `main.js`, `preload.js` y `renderer/app.js` sin errores.
+- Flujo real en Electron con diálogos nativos: **Guardar proyecto…** escribió un `.cuepad` de 75 439 741 bytes y **Abrir proyecto…** lo volvió a cargar con 36 pistas, master al 32 % y las asignaciones `82 stop_last`, `85 master_mute`, `89 stop_all` y `98 reset_state`.
+- La lectura de `pads.json` tolera ahora el BOM UTF-8 (`\uFEFF`) heredado de algunas herramientas de edición, en lugar de rechazar la configuración como archivo dañado.
+- Empaquetado de Windows 2.1.0: `CUE PLAYER PAD Setup 2.1.0.exe` (115,7 MB) y `CUE-Player-Pad-2.1.0-portable.exe` (105,3 MB); `project-format.js` está incluido en `app.asar`.
+- Prueba del paquete 2.1.0 con un perfil nuevo: 64 pads sin desbordamiento, botones **Abrir proyecto…** y **Guardar proyecto…** visibles y ayuda con el formato `.cuepad`. Al abrir el proyecto de prueba se cargaron 36 pistas desde `proyectos\<id>\` del perfil, con master al 32 % y controles conservados; al volver a guardar se generó un `.cuepad` válido de 75 439 747 bytes con firma `CUEPAD01`, versión de aplicación 2.1.0, 36 audios y ningún audio omitido.
 
 Las pruebas con hardware APC mini real dependen de que el controlador esté conectado al equipo. La detección y la entrada/salida MIDI se comprobaron con el controlador conectado; la revisión visual de todos los estados de LED sigue siendo recomendable antes de usar la aplicación en directo.

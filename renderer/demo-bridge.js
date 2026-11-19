@@ -178,24 +178,6 @@
       return 'localStorage://pads.json';
     },
 
-    async saveProject(data) {
-      const project = {
-        ...data,
-        app: 'CUE PLAYER PAD',
-        saved_at: new Date().toISOString(),
-      };
-      const blob = new Blob([JSON.stringify(project, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = 'cue-player-pad-proyecto.json';
-      document.body.append(link);
-      link.click();
-      link.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 2000);
-      return { canceled: false, path: 'descarga: cue-player-pad-proyecto.json' };
-    },
-
     publishRemoteState() {},
 
     async getRemoteInfo() {

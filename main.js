@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
 const { RemoteServer } = require('./remote-server');
+const { readProjectFile, writeProjectFile } = require('./project-format');
 
 const APP_SCHEME = 'apcsampler';
 const RENDERER_DIR = path.join(__dirname, 'renderer');
@@ -228,7 +229,7 @@ function registerIpc() {
 
     let raw;
     try {
-      raw = await fsp.readFile(configPath, 'utf8');
+      raw = (await fsp.readFile(configPath, 'utf8')).replace(/^\uFEFF/, '');
     } catch (error) {
       return {
         config: null,
@@ -282,24 +283,86 @@ function registerIpc() {
     const owner = BrowserWindow.fromWebContents(event.sender) || mainWindow;
     const stamp = new Date();
     const pad = (n) => String(n).padStart(2, '0');
-    const suggested = `CUE PLAYER PAD ${stamp.getFullYear()}-${pad(stamp.getMonth() + 1)}-${pad(stamp.getDate())}.json`;
+    const suggested = `CUE PLAYER PAD ${stamp.getFullYear()}-${pad(stamp.getMonth() + 1)}-${pad(stamp.getDate())}.cuepad`;
 
     const result = await dialog.showSaveDialog(owner, {
       title: 'Guardar proyecto',
       defaultPath: path.join(app.getPath('documents'), suggested),
-      filters: [{ name: 'Proyecto CUE PLAYER PAD', extensions: ['json'] }],
+      filters: [{ name: 'Proyecto CUE PLAYER PAD', extensions: ['cuepad'] }],
     });
 
     if (result.canceled || !result.filePath) return { canceled: true };
 
-    const project = {
-      ...sanitizeConfig(data),
-      app: 'CUE PLAYER PAD',
-      saved_at: stamp.toISOString(),
-    };
+    const filePath = path.extname(result.filePath).toLowerCase() === '.cuepad'
+      ? result.filePath
+      : `${result.filePath}.cuepad`;
 
-    await fsp.writeFile(result.filePath, JSON.stringify(project, null, 2), 'utf8');
-    return { canceled: false, path: result.filePath };
+    try {
+      const project = await writeProjectFile({
+        filePath,
+        config: sanitizeConfig(data),
+        appVersion: app.getVersion(),
+      });
+
+      return {
+        canceled: false,
+        path: filePath,
+        embedded: project.embedded,
+        missing: project.missing,
+        missingPads: project.missingPads,
+        bytes: project.bytes,
+      };
+    } catch (error) {
+      throw new Error(`No se pudo guardar el proyecto: ${errorMessage(error)}`);
+    }
+  });
+
+  ipcMain.handle('project:open', async (event, options = {}) => {
+    const owner = BrowserWindow.fromWebContents(event.sender) || mainWindow;
+
+    if (options && options.hasContent) {
+      const choice = await dialog.showMessageBox(owner, {
+        type: 'question',
+        buttons: ['Cancelar', 'Abrir proyecto'],
+        defaultId: 0,
+        cancelId: 0,
+        noLink: true,
+        title: 'Abrir proyecto',
+        message: '¿Abrir un proyecto .cuepad?',
+        detail: 'La sesión actual se reemplazará por el contenido del proyecto.',
+      });
+      if (choice.response !== 1) return { canceled: true };
+    }
+
+    const result = await dialog.showOpenDialog(owner, {
+      title: 'Abrir proyecto',
+      properties: ['openFile'],
+      filters: [{ name: 'Proyecto CUE PLAYER PAD', extensions: ['cuepad'] }],
+    });
+
+    if (result.canceled || result.filePaths.length === 0) return { canceled: true };
+
+    const filePath = result.filePaths[0];
+
+    try {
+      const project = await readProjectFile({
+        filePath,
+        extractRoot: path.join(app.getPath('userData'), 'proyectos'),
+        sanitizeConfig,
+      });
+
+      return {
+        canceled: false,
+        path: filePath,
+        config: project.config,
+        audioCount: project.audioCount,
+        missingPads: project.missingPads,
+        savedAt: project.header?.saved_at || null,
+        appVersion: project.header?.app_version || null,
+      };
+    } catch (error) {
+      throw new Error(`No se pudo abrir el proyecto: ${errorMessage(error)}`);
+    }
   });
 
   ipcMain.on('remote:publish', (_event, state) => {

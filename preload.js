@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('desktop', {
   saveConfigSync: (data) => ipcRenderer.sendSync('config:save-sync', data),
   getConfigPath: () => ipcRenderer.invoke('config:path'),
   saveProject: (data) => ipcRenderer.invoke('project:save', data),
+  openProject: (options) => ipcRenderer.invoke('project:open', options),
   publishRemoteState: (state) => ipcRenderer.send('remote:publish', state),
   getRemoteInfo: () => ipcRenderer.invoke('remote:info'),
   onRemoteCommand: (callback) => {

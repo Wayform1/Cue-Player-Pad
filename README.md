@@ -24,7 +24,8 @@ También incluye **control remoto por web**: un teléfono, una tablet u otro ord
 - Shift (98) configurable, también sin asignar de inicio.
 - Acciones **Reiniciar LEDs y estados**, **Detener todo** y **Parar última** disponibles en la barra superior y asignables a cualquier botón.
 - **Nuevo proyecto** para vaciar pads, mutes, faders y asignaciones.
-- **Guardar proyecto…** para exportar la sesión completa a un archivo JSON.
+- **Abrir proyecto…** para cargar un archivo `.cuepad` y reemplazar la sesión actual.
+- **Guardar proyecto…** para crear un `.cuepad` autocontenido: configuración, asignaciones y una copia de todos los audios en un solo archivo.
 - Pantalla de carga con barra de porcentaje.
 - **Ayuda** con el manual básico integrado.
 - Retroalimentación de LEDs en los pads y en los botones de pista y escena asignados; los que están sin asignar permanecen apagados. Shift se resalta en la interfaz, pero el APC mini no tiene LED físico en ese botón.
@@ -91,27 +92,57 @@ La aplicación se puede empaquetar para abrirla con doble clic y copiarla a otro
 
 Se generan dos archivos:
 
-- **`CUE PLAYER PAD Setup 2.0.0.exe`** — instalador normal, con accesos directos en el escritorio y el menú Inicio.
-- **`CUE-Player-Pad-2.0.0-portable.exe`** — un único archivo que no necesita instalación. Cópialo a otro ordenador Windows y ábrelo con doble clic.
+- **`CUE PLAYER PAD Setup 2.1.0.exe`** — instalador normal, con accesos directos en el escritorio y el menú Inicio.
+- **`CUE-Player-Pad-2.1.0-portable.exe`** — un único archivo que no necesita instalación. Cópialo a otro ordenador Windows y ábrelo con doble clic.
 
-El ejecutable portable sigue guardando la configuración en `%APPDATA%\CUE PLAYER PAD\pads.json`, así que no es portable al 100 %: los archivos de audio y la configuración no viajan dentro del `.exe`.
+El ejecutable portable sigue guardando la configuración en `%APPDATA%\CUE PLAYER PAD\pads.json`, así que no es portable al 100 %: los archivos de audio y la configuración no viajan dentro del `.exe`. Para llevar una sesión completa a otro equipo, usa **Guardar proyecto…** y el archivo `.cuepad`.
 
 ### Linux (AppImage)
 
-El AppImage se genera con:
+El AppImage es un único archivo ejecutable que ya incluye Electron y todas las dependencias de la aplicación. No se instala nada en el sistema.
+
+Para usarlo:
+
+1. Copia `CUE-Player-Pad-2.1.0-x86_64.AppImage` al equipo Linux.
+2. Dale permiso de ejecución y ábrelo:
+
+```bash
+chmod +x CUE-Player-Pad-2.1.0-x86_64.AppImage
+./CUE-Player-Pad-2.1.0-x86_64.AppImage
+```
+
+También puedes hacer doble clic si el explorador de archivos permite ejecutarlo.
+
+En Ubuntu 22.04 o superior, Debian 12 y derivados suele hacer falta FUSE 2:
+
+```bash
+sudo apt install libfuse2
+```
+
+En Ubuntu 24.04 el paquete se llama `libfuse2t64`. Si no quieres instalar FUSE, ejecuta el AppImage extrayéndolo en una carpeta temporal:
+
+```bash
+./CUE-Player-Pad-2.1.0-x86_64.AppImage --appimage-extract-and-run
+```
+
+Para audio y MIDI no hace falta configuración adicional en la mayoría de equipos: funciona con PipeWire o PulseAudio y con ALSA para el APC mini. Si el controlador no aparece, comprueba que tu usuario tenga acceso al audio y vuelve a iniciar sesión:
+
+```bash
+sudo usermod -aG audio "$USER"
+```
+
+#### Compilar el AppImage en Linux
+
+Requisitos: Node.js 20 o superior, `npm` y FUSE 2 para ejecutar el resultado.
 
 ```bash
 npm ci
 npm run dist:appimage
 ```
 
-El resultado es `dist/CUE-Player-Pad-2.0.0-x86_64.AppImage`. Para abrirlo con doble clic, marca «Permitir ejecutar como programa» en las propiedades del archivo. En Ubuntu 22.04 o superior puede hacer falta instalar FUSE:
+El resultado queda en `dist/CUE-Player-Pad-2.1.0-x86_64.AppImage`.
 
-```bash
-sudo apt install libfuse2
-```
-
-`npm run dist:linux` sigue disponible y genera el mismo AppImage junto con el resto de objetivos de Linux configurados.
+`npm run dist:linux` sigue disponible y genera el mismo AppImage junto con el resto de objetivos de Linux configurados. En Windows y macOS no se puede generar directamente porque el AppImage necesita enlaces simbólicos; usa Docker o GitHub Actions.
 
 #### Generar el AppImage desde Windows o macOS
 
@@ -143,7 +174,7 @@ El proyecto incluye `.github/workflows/build.yml`. Si subes el proyecto a GitHub
 3. Pulsa **Run workflow**.
 4. Al terminar, descarga los artefactos de Windows y Linux desde la misma ejecución.
 
-El flujo también se ejecuta al publicar una etiqueta de versión, por ejemplo `v2.0.0`.
+El flujo también se ejecuta al publicar una etiqueta de versión, por ejemplo `v2.1.0`.
 
 ### Aviso de SmartScreen
 
@@ -165,7 +196,8 @@ Los ejecutables no están firmados digitalmente. Windows puede mostrar «Windows
 | **Asignar** del panel **FADER MASTER** | Pone el master en modo aprendizaje: mueve el fader físico que quieras usar. |
 | **Quitar todo** | Deja los 17 botones sin asignar. |
 | **Nuevo proyecto** | Pide confirmación y vacía pads, mutes, faders y asignaciones. |
-| **Guardar proyecto…** | Exporta la sesión actual a un `.json` con un diálogo nativo. |
+| **Abrir proyecto…** | Abre un `.cuepad` con sus audios y reemplaza la sesión actual. |
+| **Guardar proyecto…** | Crea un `.cuepad` autocontenido con la sesión y una copia de los audios. |
 | **Asignar funciones** | Abre o cierra el cajón lateral con los selectores de botones y faders. |
 | **Remoto** | Muestra las direcciones de acceso desde otros dispositivos de la red. |
 | **Ayuda** | Abre el manual básico. |
@@ -312,10 +344,23 @@ El archivo contiene:
 
 Los archivos de configuración de versiones anteriores se migran al abrirlos. Los botones que no tengan una acción válida en `controls` quedan **sin asignar**, sin perder el resto de la configuración.
 
-### Proyectos
+### Proyectos `.cuepad`
 
-- **Nuevo proyecto** pide confirmación, vacía todos los pads y mutes, deja el master al 100 %, quita los faders y deja los 17 botones sin asignar. Después guarda la sesión vacía.
-- **Guardar proyecto…** abre un diálogo nativo y escribe un `.json` con la misma estructura que `pads.json`, más los campos `app` y `saved_at`. No cambia la configuración automática: es una copia para archivar o compartir.
+- **Nuevo proyecto** pide confirmación, vacía todos los pads y mutes, deja el master al 100 %, quita los faders y deja los 17 botones sin asignar. Después guarda la sesión vacía en `pads.json`.
+- **Guardar proyecto…** abre un diálogo nativo y crea un archivo `.cuepad` autocontenido. Incluye pads, nombres, volúmenes, mutes, faders, master, asignaciones de botones y una copia de cada archivo de audio. Es un formato binario propio, no un JSON legible.
+- **Abrir proyecto…** pide confirmación si ya hay pistas cargadas, extrae los audios en la carpeta de datos de la aplicación y reemplaza la sesión actual. La configuración automática (`pads.json`) pasa a apuntar a esos audios extraídos.
+
+El contenedor `.cuepad` tiene una firma y un número de versión propios. Cada audio se guarda con su tamaño y su hash SHA-256; al abrir se comprueba el hash y, si un archivo está dañado, el proyecto se rechaza con un aviso en lugar de cargar audio corrupto.
+
+Límites: 512 MB por archivo de audio y 4 GB por proyecto. Si una pista no se puede leer al guardar (archivo movido, borrado o demasiado grande), se omite del `.cuepad` y la barra de estado indica qué pads no se incluyeron. La entrada sigue conservada en `pads.json`.
+
+Los audios extraídos se guardan en:
+
+- **Windows:** `%APPDATA%\CUE PLAYER PAD\proyectos\<id>\`
+- **macOS:** `~/Library/Application Support/CUE PLAYER PAD/proyectos/<id>/`
+- **Linux:** `~/.config/CUE PLAYER PAD/proyectos/<id>/`
+
+No borres esa carpeta mientras uses el proyecto abierto. Los `.cuepad` originales pueden archivarse o compartirse; el proyecto abierto funciona con la copia extraída.
 
 ### Migración desde versiones anteriores
 
@@ -359,6 +404,7 @@ El límite de lectura por archivo es de **512 MB**. La decodificación se hace e
 ```text
 main.js                     Proceso principal de Electron, IPC, configuración y protocolo
 preload.js                  Puente seguro entre el renderer y Electron
+project-format.js           Contenedor .cuepad: cabecera, audios, hash y extracción
 remote-server.js            Servidor HTTP/SSE del control remoto y validación de órdenes
 remote/
   index.html                Página de control remoto
@@ -382,6 +428,7 @@ renderer/
 tools/
   preview-server.js         Servidor estático para la vista previa
   build-appimage.js         Generación del AppImage en Linux o con Docker
+  test-project-format.js    Prueba del contenedor .cuepad sin abrir Electron
 .github/workflows/
   build.yml                 Compilación automática para Windows y Linux
 ```
@@ -442,7 +489,8 @@ En modo desarrollo, pulsa `F12` o `Ctrl+Shift+I` para abrir las herramientas de 
 - `contextIsolation: true`, `sandbox: true`, `nodeIntegration: false`.
 - La interfaz se sirve con un protocolo propio (`apcsampler://`) restringido a la carpeta `renderer`.
 - CSP sin scripts inline ni conexiones externas.
-- El renderer solo puede usar las operaciones IPC expuestas por `preload.js`: elegir archivo, leer audio, cargar/guardar configuración, consultar la ruta y exportar un proyecto con diálogo nativo.
+- El renderer solo puede usar las operaciones IPC expuestas por `preload.js`: elegir archivo, leer audio, cargar/guardar configuración, consultar la ruta y abrir/guardar proyectos `.cuepad` con diálogo nativo.
+- El contenedor `.cuepad` se valida en el proceso principal: firma, versión, límites de tamaño, SHA-256 de cada audio, pads 0–63 e identificador seguro antes de extraer nada. Las rutas absolutas originales no se guardan dentro del proyecto.
 - La lectura de audio está limitada a archivos de hasta 512 MB.
 - El servidor remoto no pide contraseña y escucha en la red local; está pensado para redes cerradas o de confianza. No lo expongas directamente a Internet.
 - Solo se aceptan las órdenes `toggle`, `mute`, `stop_all`, `reset`, `master_mute` y `master` con notas 0–63 y volúmenes 0–1; el resto se rechaza con `400`. El servidor también limita el tamaño de las órdenes y el número de clientes conectados.
@@ -456,6 +504,7 @@ En modo desarrollo, pulsa `F12` o `Ctrl+Shift+I` para abrir las herramientas de 
 - Los faders son de 7 bits (CC 0–127); no se usa MIDI de 14 bits.
 - Las escenas y los botones de pista trabajan sobre filas y columnas completas; no hay escenas guardadas con nombre ni cambios de tempo.
 - Las rutas de audio son absolutas: si mueves o borras el archivo, el pad aparecerá vacío y se avisará en la barra de estado; la entrada se conserva en `pads.json` hasta que cargues otra pista en ese pad.
+- Los proyectos `.cuepad` incluyen una copia de los audios y se extraen en la carpeta de datos de la aplicación. Los antiguos proyectos exportados como `.json` no se abren desde **Abrir proyecto…**; solo se aceptan archivos `.cuepad`.
 - El modo demostración no permite elegir archivos del disco.
 - El control remoto funciona por HTTP dentro de la red local, sin cifrado, sin contraseña y sin acceso desde Internet.
 - Desde la página remota solo se reproducen pads, se ajusta el master y se usan mute, detener todo y reiniciar LEDs; la carga de archivos, el renombrado, las asignaciones y los proyectos siguen en la ventana de Electron.

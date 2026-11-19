@@ -53,6 +53,7 @@
     <div class="toolbar" aria-label="Acciones del proyecto">
       <div class="toolbar-group">
         <button class="btn btn-mini" id="newProjectButton" type="button">Nuevo proyecto</button>
+        <button class="btn btn-mini" id="openProjectButton" type="button">Abrir proyecto…</button>
         <button class="btn btn-primary btn-mini" id="saveProjectButton" type="button">Guardar proyecto…</button>
       </div>
       <div class="toolbar-group toolbar-right">
@@ -235,7 +236,7 @@
           <div class="modal-kicker">MANUAL BÁSICO</div>
           <h2 class="modal-title">Cómo usar CUE PLAYER PAD</h2>
         </div>
-        <p class="mapping-hint">Todo se guarda automáticamente en la sesión; usa <b>Guardar proyecto…</b> para exportar una copia.</p>
+        <p class="mapping-hint">Todo se guarda automáticamente en la sesión; usa <b>Guardar proyecto…</b> para crear un archivo <code>.cuepad</code> con los audios incluidos.</p>
       </div>
 
       <div class="help-scroll">
@@ -275,7 +276,8 @@
           <h3>Proyectos y actuación</h3>
           <ul>
             <li><b>Nuevo proyecto</b> vacía los pads y las asignaciones, y deja el master al 100 %.</li>
-            <li><b>Guardar proyecto…</b> exporta un archivo <code>.json</code> con pistas, volúmenes, faders y asignaciones.</li>
+            <li><b>Guardar proyecto…</b> crea un archivo <code>.cuepad</code> con pistas, volúmenes, faders, asignaciones y una copia de los audios. Puedes llevarlo a otro equipo y abrirlo allí.</li>
+            <li><b>Abrir proyecto…</b> reemplaza la sesión actual con el contenido de un <code>.cuepad</code>. Los audios se extraen en la carpeta de la aplicación.</li>
             <li><b>Detener todo</b> para todas las pistas; <b>Parar última</b> detiene la que empezó más recientemente.</li>
             <li><b>Reiniciar LEDs</b> deja las pistas cargadas en amarillo y limpia mutes y estados de reproducción.</li>
           </ul>

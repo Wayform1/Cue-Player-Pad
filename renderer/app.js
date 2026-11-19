@@ -84,6 +84,7 @@ const ui = {
   stopAllButton: $('stopAllButton'),
   stopLastButton: $('stopLastButton'),
   newProjectButton: $('newProjectButton'),
+  openProjectButton: $('openProjectButton'),
   saveProjectButton: $('saveProjectButton'),
   assignButton: $('assignButton'),
   assignPanel: $('assignPanel'),
@@ -1085,7 +1086,7 @@ function resetPerformance() {
 
 /* ---------- Proyectos ---------- */
 
-function resetProject() {
+function resetProject({ announce = true, save = true } = {}) {
   cancelModes({ announce: false });
 
   for (let note = 0; note < PAD_COUNT; note += 1) {
@@ -1130,9 +1131,11 @@ function resetProject() {
   refreshFaderAssignments();
   syncAllLeds();
   selectPad(0);
-  scheduleSave();
+  if (save) scheduleSave();
 
-  setStatus('Proyecto nuevo: pads vacíos, master al 100 % y botones sin asignar', 'ok', 5000);
+  if (announce) {
+    setStatus('Proyecto nuevo: pads vacíos, master al 100 % y botones sin asignar', 'ok', 5000);
+  }
 }
 
 function setupProjectActions() {
@@ -1142,9 +1145,18 @@ function setupProjectActions() {
     ui.newProjectDialog.close();
     resetProject();
   });
+  ui.openProjectButton.addEventListener('click', () => { void openProject(); });
   ui.saveProjectButton.addEventListener('click', () => { void saveProject(); });
   ui.helpButton.addEventListener('click', () => ui.helpDialog.showModal());
   ui.helpClose.addEventListener('click', () => ui.helpDialog.close());
+}
+
+function formatProjectSize(bytes) {
+  const value = Number(bytes);
+  if (!Number.isFinite(value) || value <= 0) return '0 KB';
+  const mb = value / (1024 * 1024);
+  if (mb >= 1) return `${mb.toFixed(1).replace('.', ',')} MB`;
+  return `${Math.max(1, Math.round(value / 1024))} KB`;
 }
 
 async function saveProject() {
@@ -1153,17 +1165,99 @@ async function saveProject() {
     return;
   }
 
+  setStatus('Guardando proyecto con los audios…', 'muted', 0);
+
   try {
     const result = await window.desktop.saveProject(buildConfig());
-    if (!result || result.canceled) return;
-    setStatus(`Proyecto guardado en ${result.path}`, 'ok', 7000);
+    if (!result || result.canceled) {
+      resetStatus();
+      return;
+    }
+
+    const missingPads = Array.isArray(result.missingPads) ? result.missingPads : [];
+    const count = Number(result.embedded) || 0;
+    let message = `Proyecto guardado con ${count} pista${count === 1 ? '' : 's'} · ${formatProjectSize(result.bytes)}`;
+    if (missingPads.length > 0) {
+      message += ` · ${missingPads.length} no se pudo incluir (pads ${missingPads.map((note) => note + 1).join(', ')})`;
+    }
+
+    setStatus(message, missingPads.length > 0 ? 'info' : 'ok', 9000);
   } catch (error) {
     setStatus(
       `No se pudo guardar el proyecto: ${error instanceof Error ? error.message : error}`,
       'error',
-      8000,
+      9000,
     );
   }
+}
+
+async function openProject() {
+  if (!window.desktop?.openProject) {
+    setStatus('Abrir proyecto solo está disponible en la aplicación de escritorio', 'error', 6000);
+    return;
+  }
+
+  try {
+    const hasContent = pads.some((pad) => Boolean(pad.buffer || pad.path));
+    const result = await window.desktop.openProject({ hasContent });
+    if (!result || result.canceled) return;
+    await applyOpenedProject(result);
+  } catch (error) {
+    setStatus(
+      `No se pudo abrir el proyecto: ${error instanceof Error ? error.message : error}`,
+      'error',
+      9000,
+    );
+  }
+}
+
+async function applyOpenedProject(result) {
+  const config = result?.config;
+  if (!config) throw new Error('El proyecto no contiene una configuración válida');
+
+  setStatus('Abriendo proyecto y cargando pistas…', 'muted', 0);
+  resetProject({ announce: false, save: false });
+
+  state.master = clamp01(config.master ?? 1);
+  state.masterCC = config.master_cc === null
+    ? null
+    : (Number.isInteger(config.master_cc) ? config.master_cc : MASTER_CC_DEFAULT);
+  state.controls = normalizeControls(config.controls);
+
+  engine.setMaster(state.master);
+  renderMaster();
+  renderControls();
+  refreshMappingValues();
+  updateMasterAssignment();
+  updateAssignUi();
+
+  await loadSavedPads(config.pads, {
+    onProgress: ({ done, total, name }) => {
+      setStatus(
+        `Cargando pistas ${done}/${total}${name ? ` · ${name}` : ''}`,
+        'muted',
+        0,
+      );
+    },
+  });
+
+  const loaded = pads.filter((pad) => pad.buffer).length;
+  const firstLoaded = pads.findIndex((pad) => pad.buffer);
+  selectPad(firstLoaded === -1 ? 0 : firstLoaded);
+
+  syncChannelFaders();
+  refreshFaderAssignments();
+  syncAllLeds();
+  renderSelected();
+  scheduleSave();
+
+  const missingPads = Array.isArray(result.missingPads) ? result.missingPads : [];
+  let message = `Proyecto abierto: ${loaded} pista${loaded === 1 ? '' : 's'}`;
+  if (missingPads.length > 0) {
+    message += ` · ${missingPads.length} no se incluyó${missingPads.length === 1 ? '' : 'n'} al guardar (pads ${missingPads.map((note) => note + 1).join(', ')})`;
+  }
+
+  setStatus(message, missingPads.length > 0 ? 'info' : 'ok', 9000);
 }
 
 /* ---------- Menú contextual ---------- */
