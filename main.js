@@ -227,39 +227,40 @@ function registerIpc() {
   ipcMain.handle('config:load', async () => {
     await ensureConfig();
 
-    let raw;
+    // La aplicación arranca siempre sin proyecto: los pads, el master y las
+    // asignaciones vuelven a su estado inicial. El show se abre desde un
+    // archivo .cuepad guardado. pads.json queda como copia de recuperación de
+    // la última sesión y se conserva en pads.recuperacion.json sin restaurarse.
+    // Solo se reemplaza esa copia si la sesión anterior tenía contenido real.
+    let recoveryPath = null;
     try {
-      raw = (await fsp.readFile(configPath, 'utf8')).replace(/^\uFEFF/, '');
-    } catch (error) {
-      return {
-        config: null,
-        path: configPath,
-        error: `No se pudo leer el archivo (${errorMessage(error)})`,
-      };
-    }
-
-    try {
-      return { config: sanitizeConfig(JSON.parse(raw)), path: configPath };
-    } catch (error) {
-      let backupPath = null;
+      const raw = (await fsp.readFile(configPath, 'utf8')).replace(/^\uFEFF/, '');
+      let hasContent = true;
       try {
-        backupPath = `${configPath}.bak`;
-        await fsp.copyFile(configPath, backupPath);
+        const parsed = JSON.parse(raw);
+        const padCount = Object.keys(parsed?.pads || {}).length;
+        const assignedControls = Object.values(parsed?.controls || {})
+          .filter((value) => typeof value === 'string' && value !== 'none').length;
+        hasContent = padCount > 0 || assignedControls > 0;
       } catch {
-        backupPath = null;
+        // Archivo dañado: se conserva tal cual para poder revisarlo.
+        hasContent = true;
       }
 
-      const backupNote = backupPath
-        ? ` Se guardó una copia del archivo dañado en ${path.basename(backupPath)}.`
-        : '';
-
-      return {
-        config: sanitizeConfig(DEFAULT_CONFIG),
-        path: configPath,
-        backupPath,
-        error: `pads.json no es válido (${errorMessage(error)}).${backupNote}`,
-      };
+      if (hasContent) {
+        recoveryPath = path.join(path.dirname(configPath), 'pads.recuperacion.json');
+        await fsp.copyFile(configPath, recoveryPath);
+      }
+    } catch {
+      // No hay sesión anterior que conservar.
     }
+
+    return {
+      config: sanitizeConfig(DEFAULT_CONFIG),
+      path: configPath,
+      recoveryPath,
+      startedEmpty: true,
+    };
   });
 
   ipcMain.handle('config:save', async (_event, data) => {
@@ -456,6 +457,7 @@ if (!gotSingleInstanceLock) {
     createWindow();
 
     remoteServer = new RemoteServer({
+      dataDir: app.getPath('userData'),
       onCommand: (command) => {
         if (mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.webContents.send('remote:command', command);
@@ -463,7 +465,13 @@ if (!gotSingleInstanceLock) {
       },
       onStatus: (info) => {
         const lan = info.urls?.find((item) => item.label !== 'Este equipo');
+        const secureLan = info.secureUrls?.find((item) => item.label !== 'Este equipo');
         console.info(`Control remoto activo en el puerto ${info.port}${lan ? ` · ${lan.url}` : ''}`);
+        if (secureLan) {
+          console.info(`Control remoto con APC en el navegador: ${secureLan.url}`);
+        } else if (info.secureError) {
+          console.warn(`Control remoto HTTPS no disponible: ${info.secureError}`);
+        }
       },
     });
 

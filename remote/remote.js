@@ -146,6 +146,26 @@
     setConnection('on', 'Conectado');
     renderMaster(state);
     if (Array.isArray(state.pads)) renderPads(state.pads);
+    window.CuePadRemoteMidi?.updateState(state);
+  }
+
+  async function startMidi() {
+    let httpsPort = null;
+    try {
+      const response = await fetch('/api/info', { cache: 'no-store' });
+      if (response.ok) {
+        const info = await response.json();
+        if (Number.isFinite(info?.httpsPort)) httpsPort = info.httpsPort;
+      }
+    } catch {
+      // Sin información del servidor: la tarjeta MIDI mostrará solo lo básico.
+    }
+
+    window.CuePadRemoteMidi?.init({
+      sendCommand,
+      secure: Boolean(window.isSecureContext),
+      httpsPort,
+    });
   }
 
   function connect() {
@@ -200,6 +220,7 @@
   buildGrid();
   setConnection('', 'Conectando…');
   connect();
+  void startMidi();
 
   setTimeout(() => {
     if (!receivedState) {

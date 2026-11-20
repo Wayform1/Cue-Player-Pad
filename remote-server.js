@@ -2,14 +2,25 @@
 
 const fsp = require('node:fs/promises');
 const http = require('node:http');
+const https = require('node:https');
+const net = require('node:net');
 const os = require('node:os');
 const path = require('node:path');
 
 const REMOTE_DIR = path.join(__dirname, 'remote');
 const DEFAULT_PORT = 8787;
+const DEFAULT_SECURE_PORT = 8788;
 const PORT_TRIES = 10;
 const MAX_BODY_BYTES = 4096;
 const MAX_CLIENTS = 32;
+const CERT_DIR = 'remote-cert';
+
+// Botones del APC mini que no son pads: 64–71 (pista), 82–89 (escena) y 98 (Shift).
+const CONTROL_NOTES = new Set([
+  64, 65, 66, 67, 68, 69, 70, 71,
+  82, 83, 84, 85, 86, 87, 88, 89,
+  98,
+]);
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -59,11 +70,15 @@ function lanAddresses() {
 }
 
 class RemoteServer {
-  constructor({ onCommand, onStatus = null } = {}) {
+  constructor({ onCommand, onStatus = null, dataDir = null } = {}) {
     this.onCommand = onCommand;
     this.onStatus = onStatus;
-    this.server = null;
+    this.dataDir = dataDir || path.join(os.tmpdir(), 'cue-player-pad');
+    this.httpServer = null;
+    this.httpsServer = null;
     this.port = null;
+    this.securePort = null;
+    this.secureError = null;
     this.error = null;
     this.lastState = null;
     this.clients = new Set();
@@ -71,46 +86,57 @@ class RemoteServer {
   }
 
   info() {
-    if (!this.server) {
+    if (!this.httpServer) {
       return { enabled: false, error: this.error || 'El servidor no está iniciado' };
     }
 
-    const base = (host) => `http://${host}:${this.port}/`;
-    const urls = [{ label: 'Este equipo', url: base('127.0.0.1') }];
+    const base = (scheme, host, port) => `${scheme}://${host}:${port}/`;
+    const urls = [{ label: 'Este equipo', url: base('http', '127.0.0.1', this.port) }];
+    const secureUrls = [];
 
     for (const item of lanAddresses()) {
       urls.push({
         label: `${item.name} · ${item.address}`,
-        url: base(item.address),
+        url: base('http', item.address, this.port),
       });
+    }
+
+    if (this.httpsServer) {
+      secureUrls.push({
+        label: 'Este equipo',
+        url: base('https', '127.0.0.1', this.securePort),
+      });
+      for (const item of lanAddresses()) {
+        secureUrls.push({
+          label: `${item.name} · ${item.address}`,
+          url: base('https', item.address, this.securePort),
+        });
+      }
     }
 
     return {
       enabled: true,
       port: this.port,
+      securePort: this.httpsServer ? this.securePort : null,
+      httpsAvailable: Boolean(this.httpsServer),
+      secureError: this.secureError,
       urls,
+      secureUrls,
     };
   }
 
   async start() {
-    for (let attempt = 0; attempt < PORT_TRIES; attempt += 1) {
-      const port = DEFAULT_PORT + attempt;
-      try {
-        this.server = await this.listen(port);
-        this.port = port;
-        this.error = null;
-        break;
-      } catch (error) {
-        if (error.code !== 'EADDRINUSE') {
-          this.error = error instanceof Error ? error.message : String(error);
-          throw error;
-        }
-      }
-    }
+    this.httpServer = await this.listenOnFreePort(DEFAULT_PORT, 'http');
+    this.port = this.httpServer.address().port;
 
-    if (!this.server) {
-      this.error = `No hay ningún puerto libre entre ${DEFAULT_PORT} y ${DEFAULT_PORT + PORT_TRIES - 1}`;
-      throw new Error(this.error);
+    try {
+      const credentials = await this.ensureCertificate();
+      this.httpsServer = await this.listenOnFreePort(DEFAULT_SECURE_PORT, 'https', credentials);
+      this.securePort = this.httpsServer.address().port;
+      this.secureError = null;
+    } catch (error) {
+      this.secureError = error instanceof Error ? error.message : String(error);
+      console.error('Control remoto HTTPS:', this.secureError);
     }
 
     this.heartbeat = setInterval(() => {
@@ -127,9 +153,29 @@ class RemoteServer {
     return this.info();
   }
 
-  listen(port) {
+  async listenOnFreePort(startPort, protocol, credentials = null) {
+    let lastError = null;
+
+    for (let attempt = 0; attempt < PORT_TRIES; attempt += 1) {
+      const port = startPort + attempt;
+      try {
+        return await this.listen(port, protocol, credentials);
+      } catch (error) {
+        lastError = error;
+        if (error.code !== 'EADDRINUSE') throw error;
+      }
+    }
+
+    const error = new Error(
+      `No hay ningún puerto libre entre ${startPort} y ${startPort + PORT_TRIES - 1}`,
+    );
+    error.cause = lastError;
+    throw error;
+  }
+
+  listen(port, protocol = 'http', credentials = null) {
     return new Promise((resolve, reject) => {
-      const server = http.createServer((req, res) => {
+      const onRequest = (req, res) => {
         this.handle(req, res).catch((error) => {
           console.error('Control remoto:', error);
           try {
@@ -139,7 +185,11 @@ class RemoteServer {
             // La respuesta ya estaba cerrada.
           }
         });
-      });
+      };
+
+      const server = protocol === 'https'
+        ? https.createServer({ key: credentials.key, cert: credentials.cert }, onRequest)
+        : http.createServer(onRequest);
 
       server.once('error', (error) => {
         try {
@@ -157,6 +207,79 @@ class RemoteServer {
     });
   }
 
+  async ensureCertificate() {
+    const dir = path.join(this.dataDir, CERT_DIR);
+    const keyPath = path.join(dir, 'key.pem');
+    const certPath = path.join(dir, 'cert.pem');
+    const metaPath = path.join(dir, 'meta.json');
+    const hosts = [...new Set([
+      'localhost',
+      '127.0.0.1',
+      ...lanAddresses().map((item) => item.address),
+    ])];
+
+    try {
+      const [key, cert, metaRaw] = await Promise.all([
+        fsp.readFile(keyPath, 'utf8'),
+        fsp.readFile(certPath, 'utf8'),
+        fsp.readFile(metaPath, 'utf8'),
+      ]);
+      const meta = JSON.parse(metaRaw);
+      const known = new Set(Array.isArray(meta.hosts) ? meta.hosts : []);
+      const expires = Date.parse(meta.expires || '');
+      const stillValid = Number.isFinite(expires) && expires - Date.now() > 30 * 24 * 60 * 60 * 1000;
+      if (stillValid && hosts.every((host) => known.has(host))) {
+        return { key, cert };
+      }
+    } catch {
+      // No hay certificado utilizable: se genera uno nuevo.
+    }
+
+    let generate;
+    try {
+      ({ generate } = require('selfsigned'));
+    } catch (error) {
+      throw new Error(`No se pudo cargar el generador de certificados (${error.message})`);
+    }
+
+    const notBefore = new Date();
+    const notAfter = new Date(notBefore.getTime() + 365 * 24 * 60 * 60 * 1000);
+    const pems = await generate(
+      [
+        { name: 'commonName', value: 'CUE PLAYER PAD' },
+        { name: 'organizationName', value: 'CUE PLAYER PAD' },
+      ],
+      {
+        keySize: 2048,
+        algorithm: 'sha256',
+        notBeforeDate: notBefore,
+        notAfterDate: notAfter,
+        extensions: [
+          { name: 'basicConstraints', cA: false, critical: true },
+          { name: 'keyUsage', digitalSignature: true, keyEncipherment: true, critical: true },
+          { name: 'extKeyUsage', serverAuth: true },
+          {
+            name: 'subjectAltName',
+            altNames: hosts.map((host) => (
+              net.isIP(host) ? { type: 7, ip: host } : { type: 2, value: host }
+            )),
+          },
+        ],
+      },
+    );
+
+    await fsp.mkdir(dir, { recursive: true });
+    await fsp.writeFile(keyPath, pems.private, 'utf8');
+    await fsp.writeFile(certPath, pems.cert, 'utf8');
+    await fsp.writeFile(
+      metaPath,
+      JSON.stringify({ hosts, created: notBefore.toISOString(), expires: notAfter.toISOString() }, null, 2),
+      'utf8',
+    );
+
+    return { key: pems.private, cert: pems.cert };
+  }
+
   stop() {
     clearInterval(this.heartbeat);
     this.heartbeat = null;
@@ -170,10 +293,16 @@ class RemoteServer {
     }
     this.clients.clear();
 
-    if (this.server) {
-      this.server.close();
-      this.server = null;
+    for (const server of [this.httpServer, this.httpsServer]) {
+      if (!server) continue;
+      try {
+        server.close();
+      } catch {
+        // El servidor ya estaba cerrado.
+      }
     }
+    this.httpServer = null;
+    this.httpsServer = null;
   }
 
   broadcast(state) {
@@ -207,6 +336,17 @@ class RemoteServer {
       return;
     }
 
+    if (url.pathname === '/api/info') {
+      res.writeHead(200, { ...headers, 'content-type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({
+        app: 'CUE PLAYER PAD',
+        secure: Boolean(req.socket.encrypted),
+        httpPort: this.port,
+        httpsPort: this.httpsServer ? this.securePort : null,
+      }));
+      return;
+    }
+
     if (url.pathname === '/api/command') {
       await this.handleCommand(req, res, headers);
       return;
@@ -217,7 +357,7 @@ class RemoteServer {
       return;
     }
 
-    if (url.pathname === '/remote.css' || url.pathname === '/remote.js') {
+    if (url.pathname === '/remote.css' || url.pathname === '/remote.js' || url.pathname === '/midi-remote.js') {
       await this.serveFile(res, url.pathname.slice(1), headers);
       return;
     }
@@ -268,7 +408,9 @@ class RemoteServer {
       return;
     }
 
-    const allowed = new Set(['toggle', 'mute', 'stop_all', 'reset', 'master_mute', 'master']);
+    const allowed = new Set([
+      'toggle', 'mute', 'stop_all', 'reset', 'master_mute', 'master', 'control', 'fader',
+    ]);
     if (!allowed.has(command.kind)) {
       res.writeHead(400, { ...headers, 'content-type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ error: 'Función no permitida' }));
@@ -279,6 +421,20 @@ class RemoteServer {
       && (!Number.isInteger(command.note) || command.note < 0 || command.note > 63)) {
       res.writeHead(400, { ...headers, 'content-type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ error: 'Pad no válido' }));
+      return;
+    }
+
+    if (command.kind === 'control' && !CONTROL_NOTES.has(command.note)) {
+      res.writeHead(400, { ...headers, 'content-type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'Botón no válido' }));
+      return;
+    }
+
+    if (command.kind === 'fader'
+      && (!Number.isInteger(command.cc) || command.cc < 0 || command.cc > 127
+        || !Number.isFinite(Number(command.value)) || command.value < 0 || command.value > 1)) {
+      res.writeHead(400, { ...headers, 'content-type': 'application/json; charset=utf-8' });
+      res.end(JSON.stringify({ error: 'Fader no válido' }));
       return;
     }
 

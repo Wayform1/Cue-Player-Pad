@@ -90,6 +90,81 @@ main {
   padding: 14px 14px 28px;
 }
 
+.apc-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.apc-card[hidden] {
+  display: none;
+}
+
+.apc-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.apc-status {
+  margin: 0;
+  color: var(--muted);
+  font-size: 10.5px;
+  line-height: 1.4;
+}
+
+.apc-card.is-on {
+  border-color: rgba(61, 220, 132, 0.35);
+  background: rgba(61, 220, 132, 0.06);
+}
+
+.apc-card.is-on .apc-status {
+  color: #9ff0c6;
+}
+
+.apc-card.is-error {
+  border-color: rgba(255, 107, 107, 0.35);
+  background: rgba(255, 107, 107, 0.06);
+}
+
+.apc-card.is-error .apc-status {
+  color: #ffb3b3;
+}
+
+.apc-actions {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.apc-button {
+  min-height: 34px;
+  padding: 6px 11px;
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+
+.apc-link {
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.apc-link:hover {
+  text-decoration: underline;
+}
+
 .master-card {
   padding: 13px 14px;
   border: 1px solid var(--line);
@@ -321,6 +396,19 @@ button.danger {
   .grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 7px;
+  }
+
+  .apc-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .apc-actions {
+    align-items: stretch;
+  }
+
+  .apc-link {
+    text-align: center;
   }
 
   .pad {

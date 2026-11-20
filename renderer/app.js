@@ -414,6 +414,7 @@ function setPadStatus(note, status) {
   renderPad(note);
   if (state.selected === note) renderSelected();
   updateControlLeds();
+  publishRemoteState();
 }
 
 function syncAllLeds() {
@@ -924,6 +925,10 @@ function executeControl(note, { source = 'ui' } = {}) {
       else setStatus('El pad seleccionado ya está vacío', 'muted', 2000);
       break;
     case 'load_selected':
+      if (source === 'remote') {
+        setStatus('Cargar una pista solo se puede hacer en el equipo anfitrión', 'muted', 2600);
+        break;
+      }
       void loadDialog(state.selected);
       break;
     case 'master_mute':
@@ -1824,20 +1829,24 @@ function onMidiAction(note) {
   }
 }
 
+function applyCC(cc, normalized) {
+  const value = clamp01(normalized);
+  if (state.masterCC === cc) setMaster(value);
+
+  for (let note = 0; note < PAD_COUNT; note += 1) {
+    if (pads[note].fader === cc && pads[note].buffer) {
+      setTrackVolume(note, value);
+    }
+  }
+}
+
 function handleCC(cc, value) {
   if (state.learn !== null) {
     finishLearn(cc);
     return;
   }
 
-  const normalized = Math.max(0, Math.min(127, value)) / 127;
-  if (state.masterCC === cc) setMaster(normalized);
-
-  for (let note = 0; note < PAD_COUNT; note += 1) {
-    if (pads[note].fader === cc && pads[note].buffer) {
-      setTrackVolume(note, normalized);
-    }
-  }
+  applyCC(cc, Math.max(0, Math.min(127, value)) / 127);
 }
 
 /* ---------- Carga de pistas ---------- */
@@ -2185,6 +2194,12 @@ let remoteLastPayload = '';
 let remoteUnsubscribe = null;
 
 function buildRemoteState() {
+  const controls = {};
+  for (const note of CONTROL_NOTES) {
+    const assigned = Boolean(state.controls[note]) && state.controls[note] !== 'none';
+    controls[note] = assigned ? CONTROL_LED.assigned : CONTROL_LED.off;
+  }
+
   return {
     app: 'CUE PLAYER PAD',
     master: Math.round(state.master * 1000) / 1000,
@@ -2197,7 +2212,9 @@ function buildRemoteState() {
       muted: pad.muted,
       volume: Math.round(pad.volume * 100) / 100,
       loaded: Boolean(pad.buffer),
+      led: LED[pad.status] ?? 0,
     })),
+    controls,
   };
 }
 
@@ -2235,6 +2252,19 @@ function applyRemoteCommand(command) {
     case 'mute':
       if (hasNote) togglePadMute(note);
       break;
+    case 'control': {
+      const control = Number(command.note);
+      if (CONTROL_NOTES.includes(control)) executeControl(control, { source: 'remote' });
+      break;
+    }
+    case 'fader': {
+      const cc = Number(command.cc);
+      const value = Number(command.value);
+      if (Number.isInteger(cc) && cc >= 0 && cc <= 127 && Number.isFinite(value)) {
+        applyCC(cc, clamp01(value));
+      }
+      break;
+    }
     case 'stop_all':
       stopAll();
       break;
@@ -2321,10 +2351,55 @@ async function openRemoteDialog() {
   }
 
   ui.remoteStatus.classList.add('is-on');
-  ui.remoteStatus.textContent = `Servidor activo en el puerto ${info.port}`;
+  ui.remoteStatus.textContent = info.httpsAvailable
+    ? `Servidor activo: HTTP ${info.port} · HTTPS ${info.securePort}`
+    : `Servidor activo en el puerto ${info.port}`;
 
+  const addGroup = (title, note) => {
+    const group = document.createElement('section');
+    group.className = 'remote-group';
+
+    const heading = document.createElement('p');
+    heading.className = 'remote-group-title';
+    heading.textContent = title;
+
+    group.append(heading);
+
+    if (note) {
+      const text = document.createElement('p');
+      text.className = 'remote-group-note';
+      text.textContent = note;
+      group.append(text);
+    }
+
+    ui.remoteList.append(group);
+    return group;
+  };
+
+  const touch = addGroup(
+    'Control táctil · HTTP',
+    'Para el móvil o la tablet: pads, master y botones. No usa MIDI.',
+  );
   for (const item of info.urls || []) {
-    ui.remoteList.append(remoteRow(item.label, item.url));
+    touch.append(remoteRow(item.label, item.url));
+  }
+
+  if (info.httpsAvailable) {
+    const hardware = addGroup(
+      'APC mini en el equipo remoto · HTTPS',
+      'Abre esta dirección, acepta el aviso del certificado y pulsa «Conectar APC». El audio sigue sonando en este equipo.',
+    );
+    for (const item of info.secureUrls || []) {
+      hardware.append(remoteRow(item.label, item.url));
+    }
+  } else {
+    const failure = addGroup(
+      'APC mini en el equipo remoto · no disponible',
+      info.secureError
+        ? `No se pudo iniciar HTTPS: ${info.secureError}`
+        : 'El servidor HTTPS no está disponible.',
+    );
+    failure.classList.add('is-error');
   }
 }
 
@@ -2430,8 +2505,8 @@ async function boot() {
     return;
   }
 
-  setBootProgress(45, 'Leyendo el proyecto guardado…');
-  setStatus('Cargando configuración…', 'muted', 0);
+  setBootProgress(45, 'Preparando una sesión vacía…');
+  setStatus('Iniciando sin proyecto…', 'muted', 0);
 
   let loaded;
   try {
@@ -2496,6 +2571,10 @@ async function boot() {
   refreshFaderAssignments();
   syncAllLeds();
   renderSelected();
+
+  if (firstLoaded === -1) {
+    setIdleStatus('Sesión vacía · Abre un proyecto .cuepad para cargar el show', 'muted');
+  }
 
   if (loaded.error) resetStatus();
   finishBoot();

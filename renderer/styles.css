@@ -1552,7 +1552,41 @@ input:focus-visible {
 .remote-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
+}
+
+.remote-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.018);
+}
+
+.remote-group.is-error {
+  border-color: rgba(255, 107, 107, 0.35);
+}
+
+.remote-group-title {
+  margin: 0;
+  color: var(--muted);
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.remote-group-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.remote-group.is-error .remote-group-note {
+  color: #ffb3b3;
 }
 
 .remote-item {

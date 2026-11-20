@@ -1,6 +1,6 @@
 {
   "name": "cue-player-pad",
-  "version": "2.1.0",
+  "version": "2.3.0",
   "private": true,
   "description": "Reproductor de cues de 64 pads con Electron, Web Audio y Web MIDI",
   "main": "main.js",
@@ -80,5 +80,8 @@
       ],
       "artifactName": "CUE-Player-Pad-${version}-${arch}.${ext}"
     }
+  },
+  "dependencies": {
+    "selfsigned": "^5.5.0"
   }
 }

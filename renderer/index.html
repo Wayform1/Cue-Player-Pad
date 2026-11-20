@@ -216,7 +216,7 @@
       </div>
       <p class="dialog-text">
         Conecta el teléfono, la tablet u otro ordenador a la misma red Wi-Fi o LAN y abre una de estas direcciones.
-        El controlador MIDI sigue conectado a este equipo; el navegador solo envía las órdenes.
+        El audio y la reproducción siguen en este equipo. Si quieres usar un APC mini conectado al equipo remoto, abre la dirección HTTPS.
       </p>
       <div class="remote-status" id="remoteStatus">Comprobando el servidor…</div>
       <div class="remote-list" id="remoteList"></div>
@@ -267,7 +267,9 @@
           <ul>
             <li>Pulsa <b>Remoto</b> para ver las direcciones de acceso desde un teléfono, tablet u otro PC de la misma red.</li>
             <li>Abre una dirección en el navegador: verás los 64 pads, el master y los botones de detener todo y reiniciar.</li>
-            <li>El audio y el controlador MIDI siguen en este equipo; el navegador solo envía órdenes.</li>
+            <li>El audio siempre suena en este equipo; el navegador solo envía órdenes.</li>
+            <li>El APC mini puede estar conectado a este equipo o al equipo remoto. Para el remoto, abre la dirección <b>HTTPS</b>, acepta el aviso del certificado y pulsa <b>Conectar APC</b> en la página. Funciona en Chrome o Edge de escritorio y en Chrome de Android; Safari e iOS no admiten Web MIDI.</li>
+            <li>Los LEDs del APC remoto se sincronizan por la red con el estado real, con un pequeño retardo.</li>
             <li>No hay contraseña: usa el control remoto solo en una red cerrada o de confianza y permite el acceso a Electron en el firewall de Windows (redes privadas).</li>
           </ul>
         </section>
@@ -275,9 +277,11 @@
         <section class="help-section">
           <h3>Proyectos y actuación</h3>
           <ul>
+            <li>La aplicación arranca siempre <b>sin proyecto</b>: los pads aparecen libres y los 17 botones sin asignar. Abre tu archivo <code>.cuepad</code> guardado para cargar el show.</li>
             <li><b>Nuevo proyecto</b> vacía los pads y las asignaciones, y deja el master al 100 %.</li>
             <li><b>Guardar proyecto…</b> crea un archivo <code>.cuepad</code> con pistas, volúmenes, faders, asignaciones y una copia de los audios. Puedes llevarlo a otro equipo y abrirlo allí.</li>
             <li><b>Abrir proyecto…</b> reemplaza la sesión actual con el contenido de un <code>.cuepad</code>. Los audios se extraen en la carpeta de la aplicación.</li>
+            <li>La sesión de trabajo se guarda en <code>pads.json</code> como copia de recuperación, pero no se restaura al iniciar; el proyecto bueno es el <code>.cuepad</code>.</li>
             <li><b>Detener todo</b> para todas las pistas; <b>Parar última</b> detiene la que empezó más recientemente.</li>
             <li><b>Reiniciar LEDs</b> deja las pistas cargadas en amarillo y limpia mutes y estados de reproducción.</li>
           </ul>

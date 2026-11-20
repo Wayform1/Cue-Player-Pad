@@ -17,6 +17,17 @@
   </header>
 
   <main>
+    <section class="apc-card" id="apcCard" hidden>
+      <div class="apc-copy">
+        <span class="kicker">APC MINI EN ESTE EQUIPO</span>
+        <p class="apc-status" id="apcStatus">Comprobando MIDI…</p>
+      </div>
+      <div class="apc-actions">
+        <a class="apc-link" id="apcSecureLink" href="#" hidden>Usar HTTPS</a>
+        <button class="apc-button" id="apcConnect" type="button" hidden>Conectar APC</button>
+      </div>
+    </section>
+
     <section class="master-card" aria-label="Volumen general">
       <div class="master-head">
         <span class="kicker">MASTER</span>
@@ -34,11 +45,12 @@
 
     <section class="grid" id="grid" aria-label="Pads"></section>
 
-    <p class="hint">Toca un pad para reproducir o detener. El audio y el controlador MIDI siguen en el equipo anfitrión.</p>
+    <p class="hint">Toca un pad para reproducir o detener. El audio suena siempre en el equipo anfitrión. Puedes conectar el APC mini al anfitrión o a este equipo mediante HTTPS.</p>
   </main>
 
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
+  <script src="/midi-remote.js"></script>
   <script src="/remote.js"></script>
 </body>
 </html>
