@@ -4,7 +4,7 @@ Reproductor de cues de 64 pads para **Node.js + Electron**, a partir del sampler
 
 La interfaz ocupa toda la ventana: cuadrícula 8×8 de pads, columna de escenas a la derecha, botones de pista sobre los faders, Shift junto al fader master y ocho faders de canal. El master es un riel vertical a la izquierda. El panel **Asignar funciones** está oculto por defecto y se abre como cajón lateral para elegir qué hace cada botón y cada fader, de modo que los pads aprovechan todo el ancho. Los 17 botones que no son pads empiezan **sin asignar**; los botones de pista y escena encienden su LED cuando tienen una función, mientras que Shift solo se resalta en la interfaz porque el APC mini no tiene LED en ese botón. Los botones de pista y escena se dibujan redondos; Shift mantiene forma rectangular.
 
-También incluye **control remoto por web**: un teléfono, una tablet u otro ordenador de la misma red pueden abrir la página de control y manejar pads, master y las acciones principales. El audio siempre se reproduce en el equipo anfitrión, pero el **APC mini puede conectarse al anfitrión o al PC remoto**, indistintamente: en el segundo caso el navegador usa Web MIDI sobre HTTPS y sincroniza los LEDs por la red.
+También incluye **control remoto por web**: un teléfono, una tablet u otro ordenador de la misma red pueden abrir la página de control, manejar pads, master y las acciones principales, y **cargar el proyecto `.cuepad` en el equipo anfitrión**. El audio siempre se reproduce en el equipo anfitrión, pero el **APC mini puede conectarse al anfitrión o al PC remoto**, indistintamente: en el segundo caso el navegador usa Web MIDI sobre HTTPS y sincroniza los LEDs por la red.
 
 ## Características
 
@@ -15,8 +15,9 @@ También incluye **control remoto por web**: un teléfono, una tablet u otro ord
 - Panel **Asignar funciones** para botones, faders de canal y fader master, oculto por defecto y abierto como cajón lateral.
 - Botón **Asignar funciones** en la barra superior; el panel se cierra con la ✕, con `Esc` o tocando fuera.
 - **Control remoto** desde el navegador de un teléfono, tablet u otro PC de la misma red: 64 pads, master, mute, detener todo y reiniciar LEDs, sin instalar nada ni introducir códigos.
+- **Carga remota de proyectos `.cuepad`**: el archivo se sube desde el navegador y se abre en el equipo anfitrión, sin monitor ni teclado en ese equipo.
 - **APC mini en el anfitrión o en el equipo remoto**: la página HTTPS permite conectar un APC al PC remoto y enviar pads, botones y faders por la red, con LEDs sincronizados.
-- Página remota adaptable, pensada para pantallas táctiles, con el estado actualizado en tiempo real.
+- Página remota adaptable, pensada para pantallas táctiles, con el estado actualizado en tiempo real y los pads en el mismo orden visual que la ventana principal (fila superior 56–63).
 - Silencio independiente por pista, con indicador visual en el pad.
 - Volumen general con fader vertical, teclado y rueda del ratón.
 - Ocho faders de canal interactivos, sincronizados con los faders físicos CC 48–55.
@@ -94,8 +95,8 @@ La aplicación se puede empaquetar para abrirla con doble clic y copiarla a otro
 
 Se generan dos archivos:
 
-- **`CUE PLAYER PAD Setup 2.3.0.exe`** — instalador normal, con accesos directos en el escritorio y el menú Inicio.
-- **`CUE-Player-Pad-2.3.0-portable.exe`** — un único archivo que no necesita instalación. Cópialo a otro ordenador Windows y ábrelo con doble clic.
+- **`CUE PLAYER PAD Setup 2.4.0.exe`** — instalador normal, con accesos directos en el escritorio y el menú Inicio.
+- **`CUE-Player-Pad-2.4.0-portable.exe`** — un único archivo que no necesita instalación. Cópialo a otro ordenador Windows y ábrelo con doble clic.
 
 El ejecutable portable guarda la copia de recuperación de la sesión en `%APPDATA%\CUE PLAYER PAD\pads.json`, así que no es portable al 100 %: los archivos de audio y la configuración no viajan dentro del `.exe`. Para llevar una sesión completa a otro equipo, usa **Guardar proyecto…** y el archivo `.cuepad`.
 
@@ -105,12 +106,12 @@ El AppImage es un único archivo ejecutable que ya incluye Electron y todas las 
 
 Para usarlo:
 
-1. Copia `CUE-Player-Pad-2.3.0-x86_64.AppImage` al equipo Linux.
+1. Copia `CUE-Player-Pad-2.4.0-x86_64.AppImage` al equipo Linux.
 2. Dale permiso de ejecución y ábrelo:
 
 ```bash
-chmod +x CUE-Player-Pad-2.3.0-x86_64.AppImage
-./CUE-Player-Pad-2.3.0-x86_64.AppImage
+chmod +x CUE-Player-Pad-2.4.0-x86_64.AppImage
+./CUE-Player-Pad-2.4.0-x86_64.AppImage
 ```
 
 También puedes hacer doble clic si el explorador de archivos permite ejecutarlo.
@@ -124,7 +125,7 @@ sudo apt install libfuse2
 En Ubuntu 24.04 el paquete se llama `libfuse2t64`. Si no quieres instalar FUSE, ejecuta el AppImage extrayéndolo en una carpeta temporal:
 
 ```bash
-./CUE-Player-Pad-2.3.0-x86_64.AppImage --appimage-extract-and-run
+./CUE-Player-Pad-2.4.0-x86_64.AppImage --appimage-extract-and-run
 ```
 
 Para audio y MIDI no hace falta configuración adicional en la mayoría de equipos: funciona con PipeWire o PulseAudio y con ALSA para el APC mini. Si el controlador no aparece, comprueba que tu usuario tenga acceso al audio y vuelve a iniciar sesión:
@@ -142,7 +143,7 @@ npm ci
 npm run dist:appimage
 ```
 
-El resultado queda en `dist/CUE-Player-Pad-2.3.0-x86_64.AppImage`.
+El resultado queda en `dist/CUE-Player-Pad-2.4.0-x86_64.AppImage`.
 
 `npm run dist:linux` sigue disponible y genera el mismo AppImage junto con el resto de objetivos de Linux configurados. En Windows y macOS no se puede generar directamente porque el AppImage necesita enlaces simbólicos; usa Docker o GitHub Actions.
 
@@ -176,7 +177,7 @@ El proyecto incluye `.github/workflows/build.yml`. Si subes el proyecto a GitHub
 3. Pulsa **Run workflow**.
 4. Al terminar, descarga los artefactos de Windows y Linux desde la misma ejecución.
 
-El flujo también se ejecuta al publicar una etiqueta de versión, por ejemplo `v2.3.0`.
+El flujo también se ejecuta al publicar una etiqueta de versión, por ejemplo `v2.4.0`.
 
 ### Aviso de SmartScreen
 
@@ -308,15 +309,67 @@ https://192.168.1.18:8788/
 - El certificado HTTPS es **propio y autofirmado**. Se genera en el primer arranque y se guarda en `%APPDATA%\CUE PLAYER PAD\remote-cert\` (Windows) con una validez de un año; se renueva solo si caduca o si cambia la IP de la red local. El navegador mostrará un aviso de seguridad la primera vez: es normal, continúa y, si quieres, instala el certificado como de confianza en ese equipo.
 - Si abres la página HTTPS y el navegador no ofrece Web MIDI, prueba con Chrome o Edge actualizados; algunos navegadores exigen que la conexión sea de confianza para conceder el permiso.
 
+### Equipo remoto con Linux
+
+El APC mini es un dispositivo USB estándar (class-compliant): Linux lo reconoce sin instalar controladores. En el PC remoto no hace falta instalar CUE PLAYER PAD; basta con un navegador Chromium y el APC conectado por USB.
+
+1. Comprueba que el sistema ve el controlador:
+
+   ```bash
+   amidi -l
+   ```
+
+   Debe aparecer una entrada del tipo `hw:2,0,0  APC MINI`. Si no aparece, revisa el cable y `lsusb`.
+
+2. Da permiso al usuario sobre los dispositivos de audio/MIDI. Lo habitual es pertenecer al grupo `audio`:
+
+   ```bash
+   sudo usermod -aG audio "$USER"
+   ```
+
+   Cierra la sesión y vuelve a entrar. Comprueba con `ls -l /dev/snd/` que los dispositivos `midiC*D*` son accesibles para tu usuario.
+
+3. Abre la dirección **HTTPS** del servidor en **Chrome, Chromium o Edge**. Firefox no admite Web MIDI. Acepta el aviso del certificado la primera vez y pulsa **Conectar APC**.
+
+4. Cierra cualquier programa que esté usando el APC (DAW, Ardour, Qtractor, un puente JACK/MIDI, etc.): el dispositivo raw de ALSA suele admitir un solo programa a la vez. Si usas Chromium instalado como **Snap** o **Flatpak**, concede acceso a ALSA y a `/dev/snd`; sin ese permiso el navegador no verá el controlador.
+
+Notas:
+
+- Chrome/Chromium usa el dispositivo **raw MIDI de ALSA**, no los puertos del secuenciador. Por eso `amidi -l` es la comprobación buena; `aconnect -l` puede no mostrarlo.
+- Si el navegador vuelve a mostrar el aviso del certificado tras cambiar la IP del servidor, es normal: el certificado se regenera con la nueva IP. Acepta el aviso otra vez o instala `cert.pem` como de confianza en el equipo Linux.
+- Los LEDs, los faders y los botones funcionan igual que en Windows: el navegador envía las órdenes al servidor y el audio sigue sonando en el anfitrión.
+- Si por la política del equipo Linux no puedes usar Web MIDI en el navegador, existe la alternativa de un pequeño puente nativo ALSA→HTTP en ese equipo; pídela si la necesitas.
+
+### Cargar un proyecto `.cuepad` desde el navegador
+
+La tarjeta **Proyecto en el servidor** permite cambiar el show sin tocar el equipo anfitrión. Es la vía pensada para un PC de rack sin monitor ni teclado.
+
+1. Abre la página remota (HTTP o HTTPS) y localiza la tarjeta **Proyecto en el servidor**.
+2. Pulsa **Elegir .cuepad** o arrastra el archivo sobre la tarjeta.
+3. Pulsa **Cargar en el servidor**. Si ya hay un show cargado, la página pide confirmación antes de reemplazarlo.
+4. El archivo se sube con barra de progreso. El servidor lo valida, extrae los audios y **prepara todas las pistas nuevas antes de detener la sesión actual**.
+5. Solo cuando todo está listo se aplica el proyecto. Si el archivo está dañado, no es un `.cuepad`, supera el límite o un audio no se puede decodificar, el show anterior sigue activo y la página muestra el error para reintentar.
+
+Detalles de seguridad y uso en directo:
+
+- El `.cuepad` se envía por streaming a un archivo temporal y se borra al terminar, tanto si la carga funciona como si falla.
+- Límite de **4 GB** por proyecto (el mismo que el formato `.cuepad`). La página y el servidor rechazan archivos mayores o vacíos.
+- Solo se admite **una carga a la vez**; un segundo intento recibe un aviso y puede reintentarse cuando termine la primera.
+- La sesión actual no se toca durante la subida, la validación ni la preparación de los audios. El cambio final es rápido porque las pistas ya están decodificadas en memoria.
+- Si se corta la red, el servidor queda libre tras un tiempo de inactividad y la página permite reintentar con el mismo archivo.
+- La carga remota no permite navegar por los archivos del servidor: solo se acepta el `.cuepad` que se envía desde el navegador.
+- El **orden de los pads es idéntico al de la ventana principal**: fila superior 56–63, después 48–55, y así hasta 0–7 en la fila inferior.
+
 ### Qué se puede hacer desde la página remota
 
-- Ver los 64 pads con su nombre y estado (libre, cargado, sonando, detenido o silenciado).
+- Ver los 64 pads con su nombre y estado (libre, cargado, sonando, detenido o silenciado), en el mismo orden que la ventana principal.
 - Tocar un pad para reproducirlo o detenerlo. Los pads vacíos aparecen desactivados.
 - Mover el **master**, activar el mute general, **Detener todo** y **Reiniciar LEDs**.
+- Cargar un proyecto `.cuepad` en el equipo anfitrión.
 - Con un APC conectado al equipo remoto por HTTPS: pulsar los pads, los 16 botones de pista y escena, Shift y los faders, igual que si estuvieran conectados al anfitrión.
 - Ver el cambio en el equipo anfitrión al instante: el estado se envía por SSE y el escritorio aplica la orden.
 
-La página remota **no** carga archivos, no renombra pads, no asigna funciones ni guarda proyectos: esas tareas siguen haciéndose en la ventana de Electron. El audio siempre se reproduce en el equipo anfitrión; solo el APC puede estar en cualquiera de los dos equipos.
+La página remota **no** permite navegar por los archivos del anfitrión, renombrar pads, asignar funciones ni guardar proyectos: esas tareas siguen haciéndose en la ventana de Electron. El audio siempre se reproduce en el equipo anfitrión; solo el APC puede estar en cualquiera de los dos equipos.
 
 ### Firewall y redes
 
@@ -482,6 +535,14 @@ Es normal: el **APC mini no tiene LED en el botón Shift**, así que ningún pro
 - Para el APC en el equipo remoto, abre la dirección HTTPS y acepta el aviso del certificado la primera vez.
 - Algunos routers aíslan a los clientes Wi-Fi entre sí o separan la red de invitados: en ese caso el teléfono no verá al PC.
 
+### La carga remota de un `.cuepad` falla
+
+- Si la página dice que el archivo no es válido, vuelve a guardarlo desde **Guardar proyecto…**: el `.cuepad` debe estar completo y con la misma versión de formato.
+- Si el error habla de una pista que no se puede preparar, el show anterior **sigue activo**. Revisa que el audio original era compatible y vuelve a crear el proyecto.
+- Si la carga se corta por red, el servidor libera el bloqueo al cabo de un par de minutos sin datos. Espera y pulsa **Cargar en el servidor** otra vez; no hace falta reiniciar la aplicación.
+- El límite es de 4 GB por proyecto. Para shows muy grandes, usa una conexión por cable y evita subir mientras hay otras transferencias en la misma red.
+- No cierres la pestaña del navegador durante la subida. Si se corta antes de recibir el archivo, el servidor cancela la carga y la sesión anterior no se modifica. Si el archivo ya se había recibido, el servidor termina de aplicarlo de forma transaccional aunque la pestaña se cierre; al reconectar, la página mostrará el proyecto activo.
+
 ### No suena nada
 
 - Haz clic una vez en la ventana: algunos entornos requieren un gesto para habilitar el audio.
@@ -508,7 +569,7 @@ En modo desarrollo, pulsa `F12` o `Ctrl+Shift+I` para abrir las herramientas de 
 - La lectura de audio está limitada a archivos de hasta 512 MB.
 - El servidor remoto no pide contraseña y escucha en la red local; está pensado para redes cerradas o de confianza. No lo expongas directamente a Internet.
 - Solo se aceptan las órdenes `toggle`, `mute`, `stop_all`, `reset`, `master_mute`, `master`, `control` (notas 64–71, 82–89 y 98) y `fader` (CC 0–127) con notas y volúmenes en rango; el resto se rechaza con `400`. El servidor también limita el tamaño de las órdenes y el número de clientes conectados.
-- Las órdenes que abren diálogos nativos, como **Cargar pista**, se ignoran cuando llegan desde el control remoto. La página remota no puede leer, escribir ni borrar archivos del anfitrión.
+- Las órdenes que abren diálogos nativos, como **Cargar pista**, se ignoran cuando llegan desde el control remoto. La página remota no puede navegar por el disco ni leer, escribir o borrar archivos del anfitrión: solo puede enviar un `.cuepad` completo, que se valida y extrae en una carpeta temporal antes de tocar la sesión.
 - El certificado HTTPS se genera en el propio equipo con `selfsigned` y se guarda en la carpeta de datos de usuario. La clave privada no sale de ese equipo y no se incluye en los proyectos `.cuepad`.
 - La página remota se sirve desde la carpeta `remote` con una CSP propia y sin acceso al sistema de archivos ni al puente de Electron.
 - El servidor remoto no se inicia en el modo de vista previa del navegador.
@@ -526,7 +587,7 @@ En modo desarrollo, pulsa `F12` o `Ctrl+Shift+I` para abrir las herramientas de 
 - En Windows, el APC mini solo puede estar conectado a un programa a la vez: úsalo en el anfitrión o en el PC remoto, no en los dos simultáneamente.
 - El APC en el equipo remoto requiere Web MIDI y un contexto seguro: Chrome o Edge de escritorio y Chrome de Android. Firefox, Safari e iOS no lo admiten.
 - Los LEDs del APC remoto llegan por SSE con un pequeño retardo; los faders se agrupan cada 60 ms para no saturar la red. El audio sigue sonando siempre en el anfitrión.
-- Desde la página remota solo se reproducen pads, se ajusta el master y se usan mute, detener todo y reiniciar LEDs; la carga de archivos, el renombrado, las asignaciones y los proyectos siguen en la ventana de Electron.
+- Desde la página remota se reproducen pads, se ajusta el master, se usan mute, detener todo y reiniciar LEDs, y se carga un proyecto `.cuepad`; el renombrado, las asignaciones y el guardado de proyectos siguen en la ventana de Electron.
 - El AppImage no se puede compilar directamente en Windows: usa Docker, un equipo Linux o GitHub Actions.
 
 ## Créditos

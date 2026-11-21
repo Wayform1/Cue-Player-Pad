@@ -1,11 +1,15 @@
 'use strict';
 
+const crypto = require('node:crypto');
+const { createWriteStream } = require('node:fs');
 const fsp = require('node:fs/promises');
 const http = require('node:http');
 const https = require('node:https');
 const net = require('node:net');
 const os = require('node:os');
 const path = require('node:path');
+const { Transform } = require('node:stream');
+const { pipeline } = require('node:stream/promises');
 
 const REMOTE_DIR = path.join(__dirname, 'remote');
 const DEFAULT_PORT = 8787;
@@ -13,7 +17,21 @@ const DEFAULT_SECURE_PORT = 8788;
 const PORT_TRIES = 10;
 const MAX_BODY_BYTES = 4096;
 const MAX_CLIENTS = 32;
+const MAX_PROJECT_BYTES = 4 * 1024 * 1024 * 1024;
 const CERT_DIR = 'remote-cert';
+const UPLOAD_DIR = 'remote-uploads';
+
+function uploadFileName(value) {
+  let name = String(value || '').trim();
+  try {
+    name = decodeURIComponent(name);
+  } catch {
+    // El nombre llega tal cual.
+  }
+  name = path.basename(name).replace(/[\u0000-\u001f<>:"/\\|?*]/g, '_').trim();
+  if (!name) return 'proyecto.cuepad';
+  return name.slice(0, 160);
+}
 
 // Botones del APC mini que no son pads: 64–71 (pista), 82–89 (escena) y 98 (Shift).
 const CONTROL_NOTES = new Set([
@@ -70,10 +88,20 @@ function lanAddresses() {
 }
 
 class RemoteServer {
-  constructor({ onCommand, onStatus = null, dataDir = null } = {}) {
+  constructor({
+    onCommand,
+    onStatus = null,
+    dataDir = null,
+    onProjectUpload = null,
+    maxProjectBytes = MAX_PROJECT_BYTES,
+  } = {}) {
     this.onCommand = onCommand;
     this.onStatus = onStatus;
+    this.onProjectUpload = onProjectUpload;
     this.dataDir = dataDir || path.join(os.tmpdir(), 'cue-player-pad');
+    this.uploadDir = path.join(this.dataDir, UPLOAD_DIR);
+    this.maxProjectBytes = Math.max(1, Number(maxProjectBytes) || MAX_PROJECT_BYTES);
+    this.projectUploadBusy = false;
     this.httpServer = null;
     this.httpsServer = null;
     this.port = null;
@@ -120,12 +148,16 @@ class RemoteServer {
       securePort: this.httpsServer ? this.securePort : null,
       httpsAvailable: Boolean(this.httpsServer),
       secureError: this.secureError,
+      maxProjectBytes: this.maxProjectBytes,
       urls,
       secureUrls,
     };
   }
 
   async start() {
+    // Restos de una carga interrumpida en una ejecución anterior.
+    await fsp.rm(this.uploadDir, { recursive: true, force: true }).catch(() => {});
+
     this.httpServer = await this.listenOnFreePort(DEFAULT_PORT, 'http');
     this.port = this.httpServer.address().port;
 
@@ -190,6 +222,11 @@ class RemoteServer {
       const server = protocol === 'https'
         ? https.createServer({ key: credentials.key, cert: credentials.cert }, onRequest)
         : http.createServer(onRequest);
+
+      // Los proyectos grandes pueden tardar en subir; el corte por inactividad
+      // se controla en la propia carga, no con el límite global de petición.
+      server.requestTimeout = 30 * 60 * 1000;
+      server.headersTimeout = 60 * 1000;
 
       server.once('error', (error) => {
         try {
@@ -324,8 +361,10 @@ class RemoteServer {
       'x-content-type-options': 'nosniff',
       'referrer-policy': 'no-referrer',
     };
+    const isPost = req.method === 'POST'
+      && (url.pathname === '/api/command' || url.pathname === '/api/project');
 
-    if (req.method !== 'GET' && req.method !== 'HEAD' && url.pathname !== '/api/command') {
+    if (req.method !== 'GET' && req.method !== 'HEAD' && !isPost) {
       res.writeHead(405, { ...headers, allow: 'GET, HEAD, POST' });
       res.end();
       return;
@@ -343,12 +382,18 @@ class RemoteServer {
         secure: Boolean(req.socket.encrypted),
         httpPort: this.port,
         httpsPort: this.httpsServer ? this.securePort : null,
+        maxProjectBytes: this.maxProjectBytes,
       }));
       return;
     }
 
     if (url.pathname === '/api/command') {
       await this.handleCommand(req, res, headers);
+      return;
+    }
+
+    if (url.pathname === '/api/project') {
+      await this.handleProjectUpload(req, res, headers, url);
       return;
     }
 
@@ -449,6 +494,110 @@ class RemoteServer {
 
     res.writeHead(200, { ...headers, 'content-type': 'application/json; charset=utf-8' });
     res.end(JSON.stringify({ ok: true }));
+  }
+
+  async handleProjectUpload(req, res, headers, url) {
+    const jsonHeaders = { ...headers, 'content-type': 'application/json; charset=utf-8' };
+    const fail = (status, message) => {
+      try {
+        if (res.headersSent || res.writableEnded) return;
+        res.writeHead(status, jsonHeaders);
+        res.end(JSON.stringify({ error: message }));
+      } catch {
+        // El navegador cerró la conexión antes de la respuesta.
+      }
+    };
+
+    if (typeof this.onProjectUpload !== 'function') {
+      req.resume();
+      fail(503, 'La carga de proyectos no está disponible');
+      return;
+    }
+
+    if (this.projectUploadBusy) {
+      req.resume();
+      fail(409, 'Ya hay un proyecto cargándose. Espera a que termine.');
+      return;
+    }
+
+    const fileName = uploadFileName(
+      req.headers['x-project-name'] || url.searchParams.get('name'),
+    );
+    if (!/\.cuepad$/i.test(fileName)) {
+      req.resume();
+      fail(400, 'El archivo debe tener la extensión .cuepad');
+      return;
+    }
+
+    const declared = Number(req.headers['content-length']);
+    if (Number.isFinite(declared) && declared > this.maxProjectBytes) {
+      req.resume();
+      fail(413, `El proyecto supera el límite de ${Math.round(this.maxProjectBytes / (1024 * 1024))} MB`);
+      return;
+    }
+
+    const maxBytes = this.maxProjectBytes;
+    let tempPath = null;
+    let size = 0;
+    let tooBig = false;
+
+    this.projectUploadBusy = true;
+
+    // Si la red se queda muda, no dejamos el servidor bloqueado para siempre.
+    req.setTimeout(2 * 60 * 1000, () => {
+      req.destroy(new Error('La carga quedó inactiva durante demasiado tiempo'));
+    });
+
+    try {
+      await fsp.mkdir(this.uploadDir, { recursive: true });
+      tempPath = path.join(this.uploadDir, `${Date.now()}-${crypto.randomUUID()}.cuepad`);
+
+      const limiter = new Transform({
+        transform(chunk, _encoding, callback) {
+          size += chunk.length;
+          if (size > maxBytes) {
+            tooBig = true;
+            callback();
+            return;
+          }
+          callback(null, chunk);
+        },
+      });
+
+      await pipeline(req, limiter, createWriteStream(tempPath));
+      // La espera de extracción y carga ya no es una subida: no debe cortarse
+      // por el tiempo de inactividad de la recepción.
+      req.setTimeout(0);
+
+      if (tooBig) {
+        fail(413, `El proyecto supera el límite de ${Math.round(maxBytes / (1024 * 1024))} MB`);
+        return;
+      }
+
+      if (size === 0) {
+        fail(400, 'El archivo enviado está vacío');
+        return;
+      }
+
+      // Si el navegador cerró la pestaña justo al terminar de enviar, no
+      // aplicamos un proyecto que ya nadie va a confirmar.
+      if (res.destroyed) return;
+
+      const result = await this.onProjectUpload({ filePath: tempPath, fileName, size });
+
+      if (!res.destroyed) {
+        res.writeHead(200, jsonHeaders);
+        res.end(JSON.stringify({ ok: true, ...result }));
+      }
+    } catch (error) {
+      const status = Number.isInteger(error?.statusCode) ? error.statusCode : 400;
+      fail(status, error instanceof Error ? error.message : String(error));
+    } finally {
+      this.projectUploadBusy = false;
+      if (tempPath) {
+        await fsp.rm(tempPath, { force: true }).catch(() => {});
+      }
+    }
   }
 
   async serveFile(res, name, headers) {

@@ -1,6 +1,7 @@
 'use strict';
 
 const { app, BrowserWindow, dialog, ipcMain, Menu, protocol } = require('electron');
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
@@ -10,6 +11,7 @@ const { readProjectFile, writeProjectFile } = require('./project-format');
 const APP_SCHEME = 'apcsampler';
 const RENDERER_DIR = path.join(__dirname, 'renderer');
 const MAX_AUDIO_BYTES = 512 * 1024 * 1024;
+const REMOTE_PROJECT_TIMEOUT_MS = 10 * 60 * 1000;
 const DEFAULT_CONFIG = { version: 3, master: 1, master_cc: 56, controls: {}, pads: {} };
 
 const LEGACY_APP_NAME = 'APC mini Sampler';
@@ -32,6 +34,7 @@ protocol.registerSchemesAsPrivileged([
 let mainWindow = null;
 let configPath = null;
 let remoteServer = null;
+const pendingRemoteProjects = new Map();
 
 function getConfigPath() {
   return path.join(app.getPath('userData'), 'pads.json');
@@ -45,6 +48,56 @@ function clampNumber(value, fallback, min, max) {
 
 function errorMessage(error) {
   return error instanceof Error ? error.message : String(error);
+}
+
+// Abre un proyecto enviado desde el navegador en la ventana residente y espera
+// a que el renderer termine de cargar las pistas. El archivo nunca se abre en
+// el navegador: solo se envía la configuración ya validada y extraída.
+// Si la ventana desaparece o el renderer se cae, no dejamos una carga remota
+// esperando hasta el tiempo máximo: se responde al navegador de inmediato.
+function rejectPendingRemoteProjects(message) {
+  const pending = [...pendingRemoteProjects.values()];
+  pendingRemoteProjects.clear();
+  for (const item of pending) item.reject(new Error(message));
+}
+
+function openProjectInWindow(project) {
+  return new Promise((resolve, reject) => {
+    const window = mainWindow;
+    if (!window || window.isDestroyed()) {
+      reject(new Error('La ventana de CUE PLAYER PAD no está disponible'));
+      return;
+    }
+
+    const token = crypto.randomUUID();
+    let timer = null;
+
+    const pending = {
+      resolve: (result) => {
+        clearTimeout(timer);
+        pendingRemoteProjects.delete(token);
+        resolve(result);
+      },
+      reject: (error) => {
+        clearTimeout(timer);
+        pendingRemoteProjects.delete(token);
+        reject(error);
+      },
+    };
+
+    timer = setTimeout(() => {
+      pendingRemoteProjects.delete(token);
+      reject(new Error('La ventana tardó demasiado en cargar el proyecto'));
+    }, REMOTE_PROJECT_TIMEOUT_MS);
+
+    pendingRemoteProjects.set(token, pending);
+
+    try {
+      window.webContents.send('remote:project-open', { token, project });
+    } catch (error) {
+      pending.reject(new Error(`No se pudo enviar el proyecto a la ventana (${errorMessage(error)})`));
+    }
+  });
 }
 
 function sanitizeConfig(input) {
@@ -370,6 +423,15 @@ function registerIpc() {
     remoteServer?.broadcast(state);
   });
 
+  ipcMain.on('remote:project-applied', (_event, payload) => {
+    const token = typeof payload?.token === 'string' ? payload.token : null;
+    const pending = token ? pendingRemoteProjects.get(token) : null;
+    if (!pending) return;
+
+    if (payload.ok) pending.resolve(payload.result || {});
+    else pending.reject(new Error(payload.error || 'No se pudo abrir el proyecto'));
+  });
+
   ipcMain.handle('remote:info', () => (
     remoteServer?.info() ?? { enabled: false, error: 'Servidor no iniciado' }
   ));
@@ -410,6 +472,13 @@ function createWindow() {
   mainWindow.once('ready-to-show', () => mainWindow.show());
   mainWindow.on('closed', () => {
     mainWindow = null;
+    rejectPendingRemoteProjects('La ventana se cerró durante la carga del proyecto');
+  });
+
+  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    rejectPendingRemoteProjects(
+      `La ventana dejó de responder durante la carga (${details?.reason || 'proceso terminado'})`,
+    );
   });
 
   mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
@@ -472,6 +541,41 @@ if (!gotSingleInstanceLock) {
         } else if (info.secureError) {
           console.warn(`Control remoto HTTPS no disponible: ${info.secureError}`);
         }
+      },
+      onProjectUpload: async ({ filePath, fileName, size }) => {
+        let project;
+        try {
+          project = await readProjectFile({
+            filePath,
+            extractRoot: path.join(app.getPath('userData'), 'proyectos'),
+            sanitizeConfig,
+          });
+        } catch (error) {
+          const failure = new Error(
+            `No se pudo abrir el proyecto: ${errorMessage(error)}`,
+          );
+          failure.statusCode = 400;
+          throw failure;
+        }
+
+        const applied = await openProjectInWindow({
+          config: project.config,
+          name: fileName,
+          audioCount: project.audioCount,
+          missingPads: project.missingPads,
+          savedAt: project.header?.saved_at || null,
+          appVersion: project.header?.app_version || null,
+        });
+
+        return {
+          project: fileName,
+          bytes: size,
+          audioCount: project.audioCount,
+          missingPads: project.missingPads,
+          loaded: Number(applied?.loaded) || 0,
+          savedAt: project.header?.saved_at || null,
+          appVersion: project.header?.app_version || null,
+        };
       },
     });
 

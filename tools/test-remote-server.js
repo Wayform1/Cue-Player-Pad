@@ -11,6 +11,7 @@ const os = require('node:os');
 const path = require('node:path');
 
 const { RemoteServer } = require('../remote-server');
+const { readProjectFile, writeProjectFile } = require('../project-format');
 
 function request(url, options = {}) {
   return new Promise((resolve, reject) => {
@@ -50,12 +51,61 @@ async function post(base, command) {
   });
 }
 
+function upload(base, body, name = 'prueba.cuepad', headers = {}) {
+  return request(`${base}/api/project?name=${encodeURIComponent(name)}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/octet-stream', ...headers },
+    body,
+  });
+}
+
 async function main() {
   const dataDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'cue-remote-test-'));
   const received = [];
+  const uploadCalls = { count: 0, names: [] };
+  const extractRoot = path.join(dataDir, 'extraidos');
+  const maxProjectBytes = 1024 * 1024;
+
+  const audioPath = path.join(dataDir, 'tono.wav');
+  await fsp.writeFile(audioPath, Buffer.from('RIFFprueba-audio'));
+  const projectPath = path.join(dataDir, 'prueba.cuepad');
+  await writeProjectFile({
+    filePath: projectPath,
+    appVersion: 'test',
+    projectId: '12345678-1234-4123-8123-123456789abc',
+    config: {
+      version: 3,
+      master: 0.7,
+      master_cc: 56,
+      controls: {},
+      pads: {
+        0: { path: audioPath, name: 'Prueba', volume: 0.8, fader: null },
+      },
+    },
+  });
+  const projectBytes = await fsp.readFile(projectPath);
+
   const server = new RemoteServer({
     dataDir,
+    maxProjectBytes,
     onCommand: (command) => received.push(command),
+    onProjectUpload: async ({ filePath, fileName, size }) => {
+      uploadCalls.count += 1;
+      uploadCalls.names.push(fileName);
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      const project = await readProjectFile({
+        filePath,
+        extractRoot,
+        sanitizeConfig: (config) => config,
+      });
+      return {
+        project: fileName,
+        bytes: size,
+        loaded: 1,
+        audioCount: project.audioCount,
+        missingPads: project.missingPads,
+      };
+    },
   });
 
   const result = { ok: false };
@@ -122,6 +172,46 @@ async function main() {
     }
     result.invalidStatuses = rejected;
 
+    const validUpload = await upload(httpsBase, projectBytes, 'prueba.cuepad');
+    const validJson = JSON.parse(validUpload.body);
+    result.uploadStatus = validUpload.status;
+    result.uploadOk = validJson.ok === true && validJson.loaded === 1 && validJson.audioCount === 1;
+    result.uploadName = validJson.project;
+
+    const invalidUpload = await upload(
+      httpsBase,
+      Buffer.from('esto no es un proyecto'),
+      'malo.cuepad',
+    );
+    result.invalidUploadStatus = invalidUpload.status;
+
+    const emptyUpload = await upload(httpsBase, Buffer.alloc(0), 'vacio.cuepad', {
+      'content-length': '0',
+    });
+    result.emptyUploadStatus = emptyUpload.status;
+
+    const bigBody = Buffer.alloc(maxProjectBytes + 2048, 1);
+    const bigUpload = await upload(httpsBase, bigBody, 'grande.cuepad', {
+      'content-length': String(bigBody.length),
+    });
+    result.overSizeStatus = bigUpload.status;
+
+    const concurrent = await Promise.all([
+      upload(httpsBase, projectBytes, 'uno.cuepad'),
+      upload(httpsBase, projectBytes, 'dos.cuepad'),
+    ]);
+    result.concurrentStatuses = concurrent
+      .map((response) => response.status)
+      .sort((a, b) => a - b);
+    result.uploadCalls = uploadCalls.count;
+    result.uploadNames = uploadCalls.names;
+
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    const leftovers = await fsp
+      .readdir(path.join(dataDir, 'remote-uploads'))
+      .catch(() => []);
+    result.uploadTempClean = leftovers.length === 0;
+
     const certDir = path.join(dataDir, 'remote-cert');
     const files = await fsp.readdir(certDir);
     result.certFiles = files;
@@ -157,6 +247,17 @@ async function main() {
       && statuses[5] === 400
       && statuses[6] === 400
       && statuses[7] === 400
+      && result.uploadStatus === 200
+      && result.uploadOk
+      && result.uploadName === 'prueba.cuepad'
+      && result.invalidUploadStatus === 400
+      && result.emptyUploadStatus === 400
+      && result.overSizeStatus === 413
+      && result.concurrentStatuses.length === 2
+      && result.concurrentStatuses[0] === 200
+      && result.concurrentStatuses[1] === 409
+      && result.uploadCalls === 3
+      && result.uploadTempClean
       && result.certReused
       && result.httpsRestarted;
   } finally {

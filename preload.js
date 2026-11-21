@@ -18,4 +18,10 @@ contextBridge.exposeInMainWorld('desktop', {
     ipcRenderer.on('remote:command', listener);
     return () => ipcRenderer.removeListener('remote:command', listener);
   },
+  onRemoteProject: (callback) => {
+    const listener = (_event, payload) => callback(payload);
+    ipcRenderer.on('remote:project-open', listener);
+    return () => ipcRenderer.removeListener('remote:project-open', listener);
+  },
+  completeRemoteProject: (payload) => ipcRenderer.send('remote:project-applied', payload),
 });

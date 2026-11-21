@@ -28,6 +28,20 @@
       </div>
     </section>
 
+    <section class="project-card" id="projectCard" aria-label="Proyecto del servidor">
+      <div class="project-head">
+        <span class="kicker">PROYECTO EN EL SERVIDOR</span>
+        <strong class="project-name" id="projectName">Sesión vacía</strong>
+      </div>
+      <p class="project-status" id="projectStatus" aria-live="polite">Elige el archivo .cuepad guardado para cargarlo en el equipo anfitrión.</p>
+      <div class="project-actions">
+        <input id="projectFile" type="file" accept=".cuepad,application/octet-stream" hidden>
+        <button id="projectPick" type="button">Elegir .cuepad</button>
+        <button id="projectLoad" class="project-load" type="button" disabled>Cargar en el servidor</button>
+      </div>
+      <progress id="projectProgress" max="100" value="0" hidden></progress>
+    </section>
+
     <section class="master-card" aria-label="Volumen general">
       <div class="master-head">
         <span class="kicker">MASTER</span>
@@ -45,7 +59,7 @@
 
     <section class="grid" id="grid" aria-label="Pads"></section>
 
-    <p class="hint">Toca un pad para reproducir o detener. El audio suena siempre en el equipo anfitrión. Puedes conectar el APC mini al anfitrión o a este equipo mediante HTTPS.</p>
+    <p class="hint">Toca un pad para reproducir o detener. El audio suena siempre en el equipo anfitrión. Puedes cargar un proyecto .cuepad y conectar el APC mini al anfitrión o a este equipo mediante HTTPS.</p>
   </main>
 
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>

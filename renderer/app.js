@@ -170,6 +170,8 @@ let configReady = false;
 let savePending = false;
 let uiLoopTimer = null;
 let mappingFlashTimer = null;
+let projectName = null;
+let projectApplyBusy = false;
 
 let renameNote = null;
 let editNote = null;
@@ -1120,6 +1122,7 @@ function resetProject({ announce = true, save = true } = {}) {
   }
 
   savedPadEntries.clear();
+  projectName = null;
   state.selected = 0;
   state.master = 1;
   state.masterMuted = false;
@@ -1136,6 +1139,7 @@ function resetProject({ announce = true, save = true } = {}) {
   refreshFaderAssignments();
   syncAllLeds();
   selectPad(0);
+  setIdleStatus('Sesión vacía · Abre un proyecto .cuepad para cargar el show', 'muted');
   if (save) scheduleSave();
 
   if (announce) {
@@ -1147,6 +1151,11 @@ function setupProjectActions() {
   ui.newProjectButton.addEventListener('click', () => ui.newProjectDialog.showModal());
   ui.newProjectCancel.addEventListener('click', () => ui.newProjectDialog.close());
   ui.newProjectAccept.addEventListener('click', () => {
+    if (projectApplyBusy) {
+      ui.newProjectDialog.close();
+      setStatus('Espera a que termine de cargar el proyecto en curso', 'muted', 4000);
+      return;
+    }
     ui.newProjectDialog.close();
     resetProject();
   });
@@ -1179,6 +1188,9 @@ async function saveProject() {
       return;
     }
 
+    projectName = result.path ? baseName(result.path) : projectName;
+    publishRemoteState(true);
+
     const missingPads = Array.isArray(result.missingPads) ? result.missingPads : [];
     const count = Number(result.embedded) || 0;
     let message = `Proyecto guardado con ${count} pista${count === 1 ? '' : 's'} · ${formatProjectSize(result.bytes)}`;
@@ -1202,11 +1214,27 @@ async function openProject() {
     return;
   }
 
+  if (projectApplyBusy) {
+    setStatus('Ya hay un proyecto cargándose; espera a que termine', 'muted', 4000);
+    return;
+  }
+
   try {
     const hasContent = pads.some((pad) => Boolean(pad.buffer || pad.path));
     const result = await window.desktop.openProject({ hasContent });
     if (!result || result.canceled) return;
-    await applyOpenedProject(result);
+
+    if (projectApplyBusy) {
+      setStatus('Ya hay un proyecto cargándose; espera a que termine', 'muted', 4000);
+      return;
+    }
+
+    projectApplyBusy = true;
+    try {
+      await applyOpenedProject(result);
+    } finally {
+      projectApplyBusy = false;
+    }
   } catch (error) {
     setStatus(
       `No se pudo abrir el proyecto: ${error instanceof Error ? error.message : error}`,
@@ -1216,12 +1244,114 @@ async function openProject() {
   }
 }
 
+// Lee y decodifica todas las pistas del proyecto nuevo sin tocar la sesión que
+// está sonando. Así un archivo dañado o un audio incompatible no puede dejar el
+// show actual a medias: el cambio solo se aplica cuando todo está preparado.
+async function preloadSavedPads(savedPads, { onProgress = null } = {}) {
+  const entries = Object.entries(savedPads || {})
+    .map(([key, value]) => [Number(key), value])
+    .filter(([note, value]) => (
+      Number.isInteger(note)
+      && note >= 0
+      && note < PAD_COUNT
+      && value
+      && typeof value.path === 'string'
+    ))
+    .sort((a, b) => a[0] - b[0]);
+
+  const buffers = new Map();
+  const failures = [];
+
+  for (const [index, [note, value]] of entries.entries()) {
+    const entry = savedEntryFrom(value);
+    if (!entry) continue;
+
+    try {
+      if (!window.desktop?.readAudioFile) throw new Error('No hay acceso al sistema de archivos');
+      const bytes = await window.desktop.readAudioFile(entry.path);
+      const buffer = await engine.decode(bytes);
+      buffers.set(note, { ...entry, buffer });
+    } catch (error) {
+      failures.push({
+        note,
+        path: entry.path,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+
+    if (onProgress) {
+      onProgress({
+        done: index + 1,
+        total: entries.length,
+        loaded: buffers.size,
+        failed: failures.length,
+        name: entry.name || baseName(entry.path),
+      });
+    }
+  }
+
+  return { entries: entries.length, buffers, failures };
+}
+
+function installPreloadedPads(items) {
+  savedPadEntries.clear();
+
+  for (const [note, item] of items) {
+    const pad = pads[note];
+    if (!pad) continue;
+
+    pad.path = item.path;
+    pad.name = item.name ?? null;
+    pad.volume = clamp01(item.volume ?? 1);
+    pad.fader = item.fader ?? null;
+    pad.muted = false;
+    pad.buffer = item.buffer;
+    pad.source = null;
+    pad.startedAt = 0;
+    pad.duration = item.buffer.duration;
+    pad.loading = false;
+    pad.pendingPath = null;
+
+    applyPadGain(note);
+    setPadStatus(note, 'loaded');
+    renderPad(note);
+  }
+}
+
 async function applyOpenedProject(result) {
   const config = result?.config;
   if (!config) throw new Error('El proyecto no contiene una configuración válida');
 
-  setStatus('Abriendo proyecto y cargando pistas…', 'muted', 0);
+  setStatus('Preparando el proyecto sin detener la sesión actual…', 'muted', 0);
+
+  const preload = await preloadSavedPads(config.pads, {
+    onProgress: ({ done, total, name }) => {
+      setStatus(
+        `Preparando pistas ${done}/${total}${name ? ` · ${name}` : ''} · la sesión actual sigue activa`,
+        'muted',
+        0,
+      );
+    },
+  });
+
+  if (preload.failures.length > 0) {
+    const detail = preload.failures
+      .slice(0, 3)
+      .map((failure) => `pad ${failure.note + 1} (${baseName(failure.path)})`)
+      .join(', ');
+    const extra = preload.failures.length > 3
+      ? ` y ${preload.failures.length - 3} más`
+      : '';
+    throw new Error(
+      `No se pudo preparar ${preload.failures.length} pista${preload.failures.length === 1 ? '' : 's'}: ${detail}${extra}. La sesión actual sigue activa.`,
+    );
+  }
+
+  setStatus('Aplicando el proyecto…', 'muted', 0);
   resetProject({ announce: false, save: false });
+  projectName = result.name
+    ? String(result.name).slice(0, 160)
+    : (result.path ? baseName(result.path) : null);
 
   state.master = clamp01(config.master ?? 1);
   state.masterCC = config.master_cc === null
@@ -1236,15 +1366,7 @@ async function applyOpenedProject(result) {
   updateMasterAssignment();
   updateAssignUi();
 
-  await loadSavedPads(config.pads, {
-    onProgress: ({ done, total, name }) => {
-      setStatus(
-        `Cargando pistas ${done}/${total}${name ? ` · ${name}` : ''}`,
-        'muted',
-        0,
-      );
-    },
-  });
+  installPreloadedPads(preload.buffers);
 
   const loaded = pads.filter((pad) => pad.buffer).length;
   const firstLoaded = pads.findIndex((pad) => pad.buffer);
@@ -1262,7 +1384,15 @@ async function applyOpenedProject(result) {
     message += ` · ${missingPads.length} no se incluyó${missingPads.length === 1 ? '' : 'n'} al guardar (pads ${missingPads.map((note) => note + 1).join(', ')})`;
   }
 
+  setIdleStatus(message, 'muted');
   setStatus(message, missingPads.length > 0 ? 'info' : 'ok', 9000);
+  publishRemoteState(true);
+
+  return {
+    loaded,
+    missingPads,
+    project: projectName,
+  };
 }
 
 /* ---------- Menú contextual ---------- */
@@ -2192,6 +2322,8 @@ function finishBoot() {
 let remotePublishTimer = null;
 let remoteLastPayload = '';
 let remoteUnsubscribe = null;
+let remoteProjectUnsubscribe = null;
+let remoteProjectBusy = false;
 
 function buildRemoteState() {
   const controls = {};
@@ -2202,6 +2334,7 @@ function buildRemoteState() {
 
   return {
     app: 'CUE PLAYER PAD',
+    project: projectName,
     master: Math.round(state.master * 1000) / 1000,
     masterMuted: state.masterMuted,
     selected: state.selected,
@@ -2284,6 +2417,36 @@ function applyRemoteCommand(command) {
   }
 
   publishRemoteState(true);
+}
+
+async function applyRemoteProject(message) {
+  const token = typeof message?.token === 'string' ? message.token : null;
+  if (!token) return;
+
+  if (remoteProjectBusy || projectApplyBusy) {
+    window.desktop?.completeRemoteProject?.({
+      token,
+      ok: false,
+      error: 'Ya hay un proyecto cargándose en el equipo',
+    });
+    return;
+  }
+
+  remoteProjectBusy = true;
+  projectApplyBusy = true;
+
+  try {
+    const summary = await applyOpenedProject(message.project || {});
+    window.desktop?.completeRemoteProject?.({ token, ok: true, result: summary });
+    publishRemoteState(true);
+  } catch (error) {
+    const text = error instanceof Error ? error.message : String(error);
+    setStatus(`No se pudo cargar el proyecto remoto: ${text}`, 'error', 9000);
+    window.desktop?.completeRemoteProject?.({ token, ok: false, error: text });
+  } finally {
+    remoteProjectBusy = false;
+    projectApplyBusy = false;
+  }
 }
 
 function remoteRow(label, url) {
@@ -2378,7 +2541,7 @@ async function openRemoteDialog() {
 
   const touch = addGroup(
     'Control táctil · HTTP',
-    'Para el móvil o la tablet: pads, master y botones. No usa MIDI.',
+    'Para el móvil o la tablet: pads, master, botones y carga del proyecto .cuepad. No usa MIDI.',
   );
   for (const item of info.urls || []) {
     touch.append(remoteRow(item.label, item.url));
@@ -2387,7 +2550,7 @@ async function openRemoteDialog() {
   if (info.httpsAvailable) {
     const hardware = addGroup(
       'APC mini en el equipo remoto · HTTPS',
-      'Abre esta dirección, acepta el aviso del certificado y pulsa «Conectar APC». El audio sigue sonando en este equipo.',
+      'Abre esta dirección, acepta el aviso del certificado y pulsa «Conectar APC». También permite cargar el proyecto .cuepad. El audio sigue sonando en este equipo.',
     );
     for (const item of info.secureUrls || []) {
       hardware.append(remoteRow(item.label, item.url));
@@ -2412,6 +2575,15 @@ function setupRemote() {
     if (typeof off === 'function') remoteUnsubscribe = off;
   } catch {
     remoteUnsubscribe = null;
+  }
+
+  try {
+    const off = window.desktop?.onRemoteProject?.((payload) => {
+      void applyRemoteProject(payload);
+    });
+    if (typeof off === 'function') remoteProjectUnsubscribe = off;
+  } catch {
+    remoteProjectUnsubscribe = null;
   }
 }
 
@@ -2589,6 +2761,7 @@ window.addEventListener('beforeunload', () => {
 
   try {
     remoteUnsubscribe?.();
+    remoteProjectUnsubscribe?.();
   } catch {
     // El canal ya puede estar cerrado.
   }
